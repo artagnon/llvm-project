@@ -198,7 +198,7 @@ private:
   /// regions or the parent operation itself, and set either the argument or
   /// parent result lattices.
   void visitRegionSuccessors(ProgramPoint point, RegionBranchOpInterface branch,
-                             Optional<unsigned> successorIndex,
+                             std::optional<unsigned> successorIndex,
                              ArrayRef<AbstractSparseLattice *> lattices);
 };
 

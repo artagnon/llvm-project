@@ -39,8 +39,8 @@ void TestModuleCombinerPass::runOnOperation() {
 
   auto listener = [](spirv::ModuleOp originalModule, StringRef oldSymbol,
                      StringRef newSymbol) {
-    llvm::outs() << "[" << originalModule.getName() << "] " << oldSymbol
-                 << " -> " << newSymbol << "\n";
+    llvm::outs() << "[" << originalModule.getName().value_or("") << "] "
+                 << oldSymbol << " -> " << newSymbol << "\n";
   };
 
   OwningOpRef<spirv::ModuleOp> combinedModule =

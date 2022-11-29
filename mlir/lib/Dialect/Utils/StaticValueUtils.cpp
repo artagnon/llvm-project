@@ -93,19 +93,19 @@ SmallVector<OpFoldResult> getAsOpFoldResult(ArrayAttr arrayAttr) {
 }
 
 /// If ofr is a constant integer or an IntegerAttr, return the integer.
-Optional<int64_t> getConstantIntValue(OpFoldResult ofr) {
+std::optional<int64_t> getConstantIntValue(OpFoldResult ofr) {
   // Case 1: Check for Constant integer.
   if (auto val = ofr.dyn_cast<Value>()) {
     APSInt intVal;
     if (matchPattern(val, m_ConstantInt(&intVal)))
       return intVal.getSExtValue();
-    return llvm::None;
+    return std::nullopt;
   }
   // Case 2: Check for IntegerAttr.
   Attribute attr = ofr.dyn_cast<Attribute>();
   if (auto intAttr = attr.dyn_cast_or_null<IntegerAttr>())
     return intAttr.getValue().getSExtValue();
-  return llvm::None;
+  return std::nullopt;
 }
 
 /// Return true if `ofr` is constant integer equal to `value`.

@@ -216,7 +216,7 @@ struct AttributeMetadata {
   /// Whether the attribute is required.
   bool isRequired;
   /// The ODS attribute constraint. Not present for implicit attributes.
-  Optional<Attribute> constraint;
+  std::optional<Attribute> constraint;
   /// The number of required attributes less than this attribute.
   unsigned lowerBound = 0;
   /// The number of required attributes greater than this attribute.
@@ -731,7 +731,7 @@ static void genAttributeVerifier(
                                 StringRef varName) {
     std::string condition = attr.getPredicate().getCondition();
 
-    Optional<StringRef> constraintFn;
+    std::optional<StringRef> constraintFn;
     if (emitHelper.isEmittingForOp() &&
         (constraintFn = staticVerifierEmitter.getAttrConstraintFn(attr))) {
       body << formatv(verifyAttrUnique, *constraintFn, varName, attrName);
@@ -1132,7 +1132,7 @@ void OpEmitter::genAttrSetters() {
       method = createMethod("bool");
     else if (isOptional)
       method =
-          createMethod("::llvm::Optional<" + baseAttr.getReturnType() + ">");
+          createMethod("::std::optional<" + baseAttr.getReturnType() + ">");
     else
       method = createMethod(attr.getReturnType());
     if (!method)
@@ -1901,12 +1901,12 @@ getBuilderSignature(const Builder &builder) {
 
   for (unsigned i = 0, e = params.size(); i < e; ++i) {
     // If no name is provided, generate one.
-    Optional<StringRef> paramName = params[i].getName();
+    auto paramName = params[i].getName();
     std::string name =
         paramName ? paramName->str() : "odsArg" + std::to_string(i);
 
     StringRef defaultValue;
-    if (Optional<StringRef> defaultParamValue = params[i].getDefaultValue())
+    if (auto defaultParamValue = params[i].getDefaultValue())
       defaultValue = *defaultParamValue;
 
     arguments.emplace_back(params[i].getCppType(), std::move(name),
@@ -1921,7 +1921,7 @@ void OpEmitter::genBuilder() {
   for (const Builder &builder : op.getBuilders()) {
     SmallVector<MethodParameter> arguments = getBuilderSignature(builder);
 
-    Optional<StringRef> body = builder.getBody();
+    auto body = builder.getBody();
     auto properties = body ? Method::Static : Method::StaticDeclaration;
     auto *method =
         opClass.addMethod("void", "build", properties, std::move(arguments));
@@ -2960,7 +2960,7 @@ OpOperandAdaptorEmitter::OpOperandAdaptorEmitter(
   adaptor.addField("::mlir::ValueRange", "odsOperands");
   adaptor.addField("::mlir::DictionaryAttr", "odsAttrs");
   adaptor.addField("::mlir::RegionRange", "odsRegions");
-  adaptor.addField("::llvm::Optional<::mlir::OperationName>", "odsOpName");
+  adaptor.addField("::std::optional<::mlir::OperationName>", "odsOpName");
 
   const auto *attrSizedOperands =
       op.getTrait("::m::OpTrait::AttrSizedOperandSegments");

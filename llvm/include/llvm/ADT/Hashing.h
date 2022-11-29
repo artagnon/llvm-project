@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -121,6 +122,10 @@ hash_code hash_value(const std::tuple<Ts...> &arg);
 /// Compute a hash_code for a standard string.
 template <typename T>
 hash_code hash_value(const std::basic_string<T> &arg);
+
+/// Compute a hash_code for std::optional.
+template <typename T>
+hash_code hash_value(const std::optional<T> &arg);
 
 
 /// Override the execution seed with a fixed value.

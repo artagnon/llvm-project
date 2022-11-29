@@ -118,14 +118,13 @@ struct VectorizationResult {
   Operation *newOp;
 };
 
-llvm::Optional<vector::CombiningKind>
+std::optional<vector::CombiningKind>
 mlir::linalg::getCombinerOpKind(Operation *combinerOp) {
   using ::mlir::vector::CombiningKind;
 
   if (!combinerOp)
-    return llvm::None;
-  return llvm::TypeSwitch<Operation *, llvm::Optional<CombiningKind>>(
-             combinerOp)
+    return std::nullopt;
+  return llvm::TypeSwitch<Operation *, std::optional<CombiningKind>>(combinerOp)
       .Case<arith::AddIOp, arith::AddFOp>(
           [&](auto op) { return CombiningKind::ADD; })
       .Case<arith::AndIOp>([&](auto op) { return CombiningKind::AND; })
@@ -137,7 +136,7 @@ mlir::linalg::getCombinerOpKind(Operation *combinerOp) {
           [&](auto op) { return CombiningKind::MUL; })
       .Case<arith::OrIOp>([&](auto op) { return CombiningKind::OR; })
       .Case<arith::XOrIOp>([&](auto op) { return CombiningKind::XOR; })
-      .Default([&](auto op) { return llvm::None; });
+      .Default([&](auto op) { return std::nullopt; });
 }
 
 /// Check whether `outputOperand` is a reduction with a single combiner
@@ -1446,7 +1445,7 @@ struct Conv1DGenerator
     Operation *reduceOp = matchLinalgReduction(linalgOp.getDpsInitOperand(0));
     if (!reduceOp)
       return;
-    llvm::Optional<vector::CombiningKind> maybeKind;
+    std::optional<vector::CombiningKind> maybeKind;
     maybeKind = getCombinerOpKind(reduceOp);
     if (!maybeKind || *maybeKind != vector::CombiningKind::ADD)
       return;

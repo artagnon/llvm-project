@@ -207,7 +207,7 @@ void AbstractSparseDataFlowAnalysis::visitBlock(Block *block) {
 
 void AbstractSparseDataFlowAnalysis::visitRegionSuccessors(
     ProgramPoint point, RegionBranchOpInterface branch,
-    Optional<unsigned> successorIndex,
+    std::optional<unsigned> successorIndex,
     ArrayRef<AbstractSparseLattice *> lattices) {
   const auto *predecessors = getOrCreateFor<PredecessorState>(point, point);
   assert(predecessors->allPredecessorsKnown() &&
@@ -215,7 +215,7 @@ void AbstractSparseDataFlowAnalysis::visitRegionSuccessors(
 
   for (Operation *op : predecessors->getKnownPredecessors()) {
     // Get the incoming successor operands.
-    Optional<OperandRange> operands;
+    std::optional<OperandRange> operands;
 
     // Check if the predecessor is the parent op.
     if (op == branch) {

@@ -187,9 +187,9 @@ mlir::linalg::computeMultiTileSizes(OpBuilder &builder, LinalgOp op,
 static bool canOmitTileOffsetInBoundsCheck(OpFoldResult tileSize,
                                            OpFoldResult numThreads,
                                            OpFoldResult iterationSize) {
-  Optional<int64_t> tileSizeConst = getConstantIntValue(tileSize);
-  Optional<int64_t> numThreadsConst = getConstantIntValue(numThreads);
-  Optional<int64_t> iterSizeConst = getConstantIntValue(iterationSize);
+  auto tileSizeConst = getConstantIntValue(tileSize);
+  auto numThreadsConst = getConstantIntValue(numThreads);
+  auto iterSizeConst = getConstantIntValue(iterationSize);
   if (!tileSizeConst || !numThreadsConst || !iterSizeConst)
     return false;
   return *tileSizeConst * (*numThreadsConst - 1) < *iterSizeConst;
@@ -217,7 +217,7 @@ static void calculateTileOffsetsAndSizes(
     RewriterBase &b, Location loc, scf::ForeachThreadOp foreachThreadOp,
     ArrayRef<OpFoldResult> numThreads, SmallVector<Range> loopRanges,
     bool omitTileOffsetBoundsCheck,
-    Optional<ArrayRef<OpFoldResult>> nominalTileSizes,
+    std::optional<ArrayRef<OpFoldResult>> nominalTileSizes,
     SmallVector<OpFoldResult> &tiledOffsets,
     SmallVector<OpFoldResult> &tiledSizes) {
   ValueRange threadIds = foreachThreadOp.getThreadIndices();
@@ -295,8 +295,8 @@ static void calculateTileOffsetsAndSizes(
 /// assume that `tileSize[i] * (numThread[i] -1) <= dimSize[i]` holds.
 static FailureOr<ForeachThreadTilingResult> tileToForeachThreadOpImpl(
     RewriterBase &b, TilingInterface op, ArrayRef<OpFoldResult> numThreads,
-    Optional<ArrayRef<OpFoldResult>> nominalTileSizes,
-    Optional<ArrayAttr> mapping, bool omitTileOffsetBoundsCheck) {
+    std::optional<ArrayRef<OpFoldResult>> nominalTileSizes,
+    std::optional<ArrayAttr> mapping, bool omitTileOffsetBoundsCheck) {
   Location loc = op->getLoc();
   OpBuilder::InsertionGuard g(b);
   SmallVector<Range> loopRanges = op.getIterationDomain(b);
@@ -381,7 +381,7 @@ static FailureOr<ForeachThreadTilingResult> tileToForeachThreadOpImpl(
 FailureOr<ForeachThreadTilingResult>
 linalg::tileToForeachThreadOp(RewriterBase &b, TilingInterface op,
                               ArrayRef<OpFoldResult> numThreads,
-                              Optional<ArrayAttr> mapping) {
+                              std::optional<ArrayAttr> mapping) {
   return tileToForeachThreadOpImpl(b, op, numThreads, /*nominalTileSizes=*/None,
                                    mapping,
                                    /*omitTileOffsetBoundsCheck=*/false);
@@ -390,7 +390,7 @@ linalg::tileToForeachThreadOp(RewriterBase &b, TilingInterface op,
 FailureOr<ForeachThreadTilingResult>
 linalg::tileToForeachThreadOpUsingTileSizes(RewriterBase &b, TilingInterface op,
                                             ArrayRef<OpFoldResult> tileSizes,
-                                            Optional<ArrayAttr> mapping) {
+                                            std::optional<ArrayAttr> mapping) {
   SmallVector<Range> loopRanges = op.getIterationDomain(b);
   unsigned nLoops = loopRanges.size();
   SmallVector<OpFoldResult> numThreads;
@@ -414,7 +414,7 @@ FailureOr<linalg::ForeachThreadReductionTilingResult>
 linalg::tileReductionUsingForeachThread(RewriterBase &b,
                                         PartialReductionOpInterface op,
                                         ArrayRef<OpFoldResult> numThreads,
-                                        Optional<ArrayAttr> mapping) {
+                                        std::optional<ArrayAttr> mapping) {
   Location loc = op.getLoc();
   OpBuilder::InsertionGuard g(b);
   // Ops implementing PartialReductionOpInterface are expected to implement

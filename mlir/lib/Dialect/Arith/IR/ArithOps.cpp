@@ -222,10 +222,11 @@ void arith::AddIOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 // AddUICarryOp
 //===----------------------------------------------------------------------===//
 
-Optional<SmallVector<int64_t, 4>> arith::AddUICarryOp::getShapeForUnroll() {
+std::optional<SmallVector<int64_t, 4>>
+arith::AddUICarryOp::getShapeForUnroll() {
   if (auto vt = getType(0).dyn_cast<VectorType>())
     return llvm::to_vector<4>(vt.getShape());
-  return None;
+  return std::nullopt;
 }
 
 // Returns the carry bit, assuming that `sum` is the result of addition of
@@ -1502,7 +1503,7 @@ static Attribute getBoolAttribute(Type type, MLIRContext *ctx, bool value) {
   return DenseElementsAttr::get(shapedType, boolAttr);
 }
 
-static Optional<int64_t> getIntegerWidth(Type t) {
+static std::optional<int64_t> getIntegerWidth(Type t) {
   if (auto intType = t.dyn_cast<IntegerType>()) {
     return intType.getWidth();
   }
@@ -1524,16 +1525,14 @@ OpFoldResult arith::CmpIOp::fold(ArrayRef<Attribute> operands) {
   if (matchPattern(getRhs(), m_Zero())) {
     if (auto extOp = getLhs().getDefiningOp<ExtSIOp>()) {
       // extsi(%x : i1 -> iN) != 0  ->  %x
-      Optional<int64_t> integerWidth =
-          getIntegerWidth(extOp.getOperand().getType());
+      auto integerWidth = getIntegerWidth(extOp.getOperand().getType());
       if (integerWidth && integerWidth.value() == 1 &&
           getPredicate() == arith::CmpIPredicate::ne)
         return extOp.getOperand();
     }
     if (auto extOp = getLhs().getDefiningOp<ExtUIOp>()) {
       // extui(%x : i1 -> iN) != 0  ->  %x
-      Optional<int64_t> integerWidth =
-          getIntegerWidth(extOp.getOperand().getType());
+      auto integerWidth = getIntegerWidth(extOp.getOperand().getType());
       if (integerWidth && integerWidth.value() == 1 &&
           getPredicate() == arith::CmpIPredicate::ne)
         return extOp.getOperand();

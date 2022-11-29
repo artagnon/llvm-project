@@ -160,7 +160,7 @@ struct TypeInterfaceGenerator : public InterfaceGenerator {
 
 static void emitInterfaceMethodDoc(const InterfaceMethod &method,
                                    raw_ostream &os, StringRef prefix = "") {
-  if (Optional<StringRef> description = method.getDescription())
+  if (auto description = method.getDescription())
     tblgen::emitDescriptionComment(*description, os, prefix);
 }
 
@@ -305,7 +305,7 @@ void InterfaceGenerator::emitModelMethodsDef(const Interface &interface) {
     os << " {\n  ";
 
     // Check for a provided body to the function.
-    if (Optional<StringRef> body = method.getBody()) {
+    if (auto body = method.getBody()) {
       if (method.isStatic())
         os << body->trim();
       else
@@ -494,10 +494,9 @@ void InterfaceGenerator::emitInterfaceDecl(const Interface &interface) {
   }
 
   // Emit any extra declarations.
-  if (Optional<StringRef> extraDecls = interface.getExtraClassDeclaration())
+  if (auto extraDecls = interface.getExtraClassDeclaration())
     os << *extraDecls << "\n";
-  if (Optional<StringRef> extraDecls =
-          interface.getExtraSharedClassDeclaration())
+  if (auto extraDecls = interface.getExtraSharedClassDeclaration())
     os << tblgen::tgfmt(*extraDecls, &extraDeclsFmt);
 
   os << "};\n";

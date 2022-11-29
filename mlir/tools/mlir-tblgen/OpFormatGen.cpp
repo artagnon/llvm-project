@@ -60,7 +60,7 @@ struct AttributeVariable
   /// Return the constant builder call for the type of this attribute, or None
   /// if it doesn't have one.
   llvm::Optional<StringRef> getTypeBuilder() const {
-    llvm::Optional<Type> attrType = var->attr.getValueType();
+    auto attrType = var->attr.getValueType();
     return attrType ? attrType->getBuilderCall() : llvm::None;
   }
 
@@ -252,7 +252,7 @@ struct OperationFormat {
     TypeResolution() = default;
 
     /// Get the index into the buildable types for this type, or None.
-    Optional<int> getBuilderIdx() const { return builderIdx; }
+    std::optional<int> getBuilderIdx() const { return builderIdx; }
     void setBuilderIdx(int idx) { builderIdx = idx; }
 
     /// Get the variable this type is resolved to, or nullptr.
@@ -264,10 +264,10 @@ struct OperationFormat {
       return resolver.dyn_cast<const NamedAttribute *>();
     }
     /// Get the transformer for the type of the variable, or None.
-    Optional<StringRef> getVarTransformer() const {
+    std::optional<StringRef> getVarTransformer() const {
       return variableTransformer;
     }
-    void setResolver(ConstArgument arg, Optional<StringRef> transformer) {
+    void setResolver(ConstArgument arg, std::optional<StringRef> transformer) {
       resolver = arg;
       variableTransformer = transformer;
       assert(getVariable() || getAttribute());
@@ -276,13 +276,13 @@ struct OperationFormat {
   private:
     /// If the type is resolved with a buildable type, this is the index into
     /// 'buildableTypes' in the parent format.
-    Optional<int> builderIdx;
+    std::optional<int> builderIdx;
     /// If the type is resolved based upon another operand or result, this is
     /// the variable or the attribute that this type is resolved to.
     ConstArgument resolver;
     /// If the type is resolved based upon another operand or result, this is
     /// a transformer to apply to the variable when resolving.
-    Optional<StringRef> variableTransformer;
+    std::optional<StringRef> variableTransformer;
   };
 
   /// The context in which an element is generated.
@@ -944,7 +944,7 @@ static void genCustomDirectiveParser(CustomDirective *dir, MethodBody &body) {
            << "OperandsLoc = parser.getCurrentLocation();\n";
       if (var->isOptional()) {
         body << llvm::formatv(
-            "    ::llvm::Optional<::mlir::OpAsmParser::UnresolvedOperand> "
+            "    ::std::optional<::mlir::OpAsmParser::UnresolvedOperand> "
             "{0}Operand;\n",
             var->name);
       } else if (var->isVariadicOfVariadic()) {
@@ -973,7 +973,7 @@ static void genCustomDirectiveParser(CustomDirective *dir, MethodBody &body) {
         body << llvm::formatv(
             "    {0} {1}Operand = {1}Operands.empty() ? {0}() : "
             "{1}Operands[0];\n",
-            "::llvm::Optional<::mlir::OpAsmParser::UnresolvedOperand>",
+            "::std::optional<::mlir::OpAsmParser::UnresolvedOperand>",
             operand->getVar()->name);
 
       } else if (auto *type = dyn_cast<TypeDirective>(input)) {
@@ -1102,7 +1102,7 @@ static void genAttrParser(AttributeVariable *attr, MethodBody &body,
   // If this attribute has a buildable type, use that when parsing the
   // attribute.
   std::string attrTypeStr;
-  if (Optional<StringRef> typeBuilder = attr->getTypeBuilder()) {
+  if (auto typeBuilder = attr->getTypeBuilder()) {
     llvm::raw_string_ostream os(attrTypeStr);
     os << tgfmt(*typeBuilder, &attrTypeCtx);
   } else {
@@ -1372,7 +1372,7 @@ void OperationFormat::genParserTypeResolution(Operator &op, MethodBody &body) {
   FmtContext verifierFCtx;
   for (TypeResolution &resolver :
        llvm::concat<TypeResolution>(resultTypes, operandTypes)) {
-    Optional<StringRef> transformer = resolver.getVarTransformer();
+    auto transformer = resolver.getVarTransformer();
     if (!transformer)
       continue;
     // Ensure that we don't verify the same variables twice.
@@ -1405,10 +1405,10 @@ void OperationFormat::genParserTypeResolution(Operator &op, MethodBody &body) {
 
   // Emit the code necessary for a type resolver.
   auto emitTypeResolver = [&](TypeResolution &resolver, StringRef curVar) {
-    if (Optional<int> val = resolver.getBuilderIdx()) {
+    if (auto val = resolver.getBuilderIdx()) {
       body << "odsBuildableType" << *val;
     } else if (const NamedTypeConstraint *var = resolver.getVariable()) {
-      if (Optional<StringRef> tform = resolver.getVarTransformer()) {
+      if (auto tform = resolver.getVarTransformer()) {
         FmtContext fmtContext;
         fmtContext.addSubst("_ctxt", "parser.getContext()");
         if (var->isVariadic())
@@ -1422,7 +1422,7 @@ void OperationFormat::genParserTypeResolution(Operator &op, MethodBody &body) {
           body << "[0]";
       }
     } else if (const NamedAttribute *attr = resolver.getAttribute()) {
-      if (Optional<StringRef> tform = resolver.getVarTransformer())
+      if (auto tform = resolver.getVarTransformer())
         body << tgfmt(*tform,
                       &FmtContext().withSelf(attr->name + "Attr.getType()"));
       else
@@ -2246,7 +2246,7 @@ private:
   /// properly resolve the type of a variable.
   struct TypeResolutionInstance {
     ConstArgument resolver;
-    Optional<StringRef> transformer;
+    std::optional<StringRef> transformer;
   };
 
   /// Verify the state of operation attributes within the format.

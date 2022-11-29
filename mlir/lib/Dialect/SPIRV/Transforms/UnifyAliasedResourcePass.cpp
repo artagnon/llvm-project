@@ -52,8 +52,8 @@ static AliasedResourceMap collectAliasedResources(spirv::ModuleOp moduleOp) {
   AliasedResourceMap aliasedResources;
   moduleOp->walk([&aliasedResources](spirv::GlobalVariableOp varOp) {
     if (varOp->getAttrOfType<UnitAttr>("aliased")) {
-      Optional<uint32_t> set = varOp.getDescriptorSet();
-      Optional<uint32_t> binding = varOp.getBinding();
+      auto set = varOp.getDescriptorSet();
+      auto binding = varOp.getBinding();
       if (set && binding)
         aliasedResources[{*set, *binding}].push_back(varOp);
     }
@@ -100,7 +100,7 @@ static Optional<int> deduceCanonicalResource(ArrayRef<spirv::SPIRVType> types) {
       if (vectorType.getNumElements() % 2 != 0)
         return llvm::None; // Odd-sized vector has special layout requirements.
 
-      Optional<int64_t> numBytes = type.getSizeInBytes();
+      auto numBytes = type.getSizeInBytes();
       if (!numBytes)
         return llvm::None;
 
@@ -279,7 +279,7 @@ void ResourceAliasAnalysis::recordIfUnifiable(
     elementTypes.push_back(type);
   }
 
-  Optional<int> index = deduceCanonicalResource(elementTypes);
+  auto index = deduceCanonicalResource(elementTypes);
   if (!index)
     return;
 

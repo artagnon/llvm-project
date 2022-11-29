@@ -53,7 +53,7 @@ LogicalResult YieldOp::verify() {
 }
 
 MutableOperandRange
-YieldOp::getMutableSuccessorOperands(Optional<unsigned> index) {
+YieldOp::getMutableSuccessorOperands(std::optional<unsigned> index) {
   return operandsMutable();
 }
 
@@ -63,7 +63,8 @@ YieldOp::getMutableSuccessorOperands(Optional<unsigned> index) {
 
 constexpr char kOperandSegmentSizesAttr[] = "operand_segment_sizes";
 
-OperandRange ExecuteOp::getSuccessorEntryOperands(Optional<unsigned> index) {
+OperandRange
+ExecuteOp::getSuccessorEntryOperands(std::optional<unsigned> index) {
   assert(index && *index == 0 && "invalid region index");
   return getBodyOperands();
 }
@@ -77,7 +78,7 @@ bool ExecuteOp::areTypesCompatible(Type lhs, Type rhs) {
   return getValueOrTokenType(lhs) == getValueOrTokenType(rhs);
 }
 
-void ExecuteOp::getSuccessorRegions(Optional<unsigned> index,
+void ExecuteOp::getSuccessorRegions(std::optional<unsigned> index,
                                     ArrayRef<Attribute>,
                                     SmallVectorImpl<RegionSuccessor> &regions) {
   // The `body` region branch back to the parent operation.
@@ -342,7 +343,7 @@ void FuncOp::build(OpBuilder &builder, OperationState &state, StringRef name,
     return;
   assert(type.getNumInputs() == argAttrs.size());
   function_interface_impl::addArgAndResultAttrs(builder, state, argAttrs,
-                                                /*resultAttrs=*/llvm::None);
+                                                /*resultAttrs=*/std::nullopt);
 }
 
 ParseResult FuncOp::parse(OpAsmParser &parser, OperationState &result) {

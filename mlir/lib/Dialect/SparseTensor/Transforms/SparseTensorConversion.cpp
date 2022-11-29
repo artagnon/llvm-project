@@ -63,7 +63,8 @@ static Value genLvlSizeCall(OpBuilder &builder, Location loc,
                             uint64_t lvl) {
   // Generate the call.
   StringRef name = "sparseLvlSize";
-  SmallVector<Value, 2> params{  // just two
+  SmallVector<Value, 2> params{
+      // just two
       src, constantIndex(builder, loc, toStoredDim(enc, lvl))};
   Type iTp = builder.getIndexType();
   return createFuncCall(builder, loc, name, iTp, params, EmitCInterface::Off)
@@ -665,7 +666,7 @@ public:
     auto enc = getSparseTensorEncoding(op.getSource().getType());
     if (!enc)
       return failure();
-    Optional<int64_t> index = op.getConstantIndex();
+    auto index = op.getConstantIndex();
     if (!index)
       return failure();
     // Generate the call.

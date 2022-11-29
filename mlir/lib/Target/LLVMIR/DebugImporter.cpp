@@ -42,8 +42,7 @@ DIBasicTypeAttr DebugImporter::translateImpl(llvm::DIBasicType *node) {
 }
 
 DICompileUnitAttr DebugImporter::translateImpl(llvm::DICompileUnit *node) {
-  Optional<DIEmissionKind> emissionKind =
-      symbolizeDIEmissionKind(node->getEmissionKind());
+  auto emissionKind = symbolizeDIEmissionKind(node->getEmissionKind());
   return DICompileUnitAttr::get(context, node->getSourceLanguage(),
                                 translate(node->getFile()),
                                 StringAttr::get(context, node->getProducer()),
@@ -51,7 +50,7 @@ DICompileUnitAttr DebugImporter::translateImpl(llvm::DICompileUnit *node) {
 }
 
 DICompositeTypeAttr DebugImporter::translateImpl(llvm::DICompositeType *node) {
-  Optional<DIFlags> flags = symbolizeDIFlags(node->getFlags());
+  auto flags = symbolizeDIFlags(node->getFlags());
   SmallVector<DINodeAttr> elements;
   for (llvm::DINode *element : node->getElements()) {
     assert(element && "expected a non-null element type");
@@ -102,7 +101,7 @@ DIScopeAttr DebugImporter::translateImpl(llvm::DIScope *node) {
 }
 
 DISubprogramAttr DebugImporter::translateImpl(llvm::DISubprogram *node) {
-  Optional<DISubprogramFlags> subprogramFlags =
+  auto subprogramFlags =
       symbolizeDISubprogramFlags(node->getSubprogram()->getSPFlags());
   return DISubprogramAttr::get(
       context, translate(node->getUnit()), translate(node->getScope()),

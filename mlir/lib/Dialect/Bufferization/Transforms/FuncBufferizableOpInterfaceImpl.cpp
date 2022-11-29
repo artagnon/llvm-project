@@ -239,7 +239,7 @@ struct CallOpInterface
     }
 
     const FuncAnalysisState &funcState = getFuncAnalysisState(state);
-    Optional<int64_t> maybeEquiv =
+    auto maybeEquiv =
         getEquivalentFuncArgIdx(funcOp, funcState, opResult.getResultNumber());
     if (maybeEquiv) {
 #ifndef NDEBUG

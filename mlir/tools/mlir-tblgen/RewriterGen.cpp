@@ -1743,7 +1743,7 @@ void StaticMatcherHelper::addPattern(Record *record) {
 
 StringRef StaticMatcherHelper::getVerifierName(DagLeaf leaf) {
   if (leaf.isAttrMatcher()) {
-    Optional<StringRef> constraint =
+    auto constraint =
         staticVerifierEmitter.getAttrConstraintFn(leaf.getAsConstraint());
     assert(constraint && "attribute constraint was not uniqued");
     return *constraint;

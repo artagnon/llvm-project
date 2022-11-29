@@ -143,7 +143,8 @@ public:
   ///   LogicalResult(PatternRewriter &rewriter, Operation *op, Attribute attr,
   ///                 StringRef failureStr);
   ///
-  Optional<StringRef> getAttrConstraintFn(const Constraint &constraint) const;
+  std::optional<StringRef>
+  getAttrConstraintFn(const Constraint &constraint) const;
 
   /// Get the name of the static function used for the given successor
   /// constraint. These functions are in the form:

@@ -84,8 +84,8 @@ struct TestOpAsmInterface : public OpAsmDialectInterface {
 
     // Check the contents of the string attribute to see what the test alias
     // should be named.
-    Optional<StringRef> aliasName =
-        StringSwitch<Optional<StringRef>>(strAttr.getValue())
+    auto aliasName =
+        StringSwitch<std::optional<StringRef>>(strAttr.getValue())
             .Case("alias_test:dot_in_name", StringRef("test.alias"))
             .Case("alias_test:trailing_digit", StringRef("test_alias0"))
             .Case("alias_test:prefixed_digit", StringRef("0_test_alias"))
@@ -383,7 +383,7 @@ Operation *TestDialect::materializeConstant(OpBuilder &builder, Attribute value,
 }
 
 ::mlir::LogicalResult FormatInferType2Op::inferReturnTypes(
-    ::mlir::MLIRContext *context, ::llvm::Optional<::mlir::Location> location,
+    ::mlir::MLIRContext *context, ::std::optional<::mlir::Location> location,
     ::mlir::ValueRange operands, ::mlir::DictionaryAttr attributes,
     ::mlir::RegionRange regions,
     ::llvm::SmallVectorImpl<::mlir::Type> &inferredReturnTypes) {
@@ -424,7 +424,7 @@ TestDialect::verifyRegionResultAttribute(Operation *op, unsigned regionIndex,
   return success();
 }
 
-Optional<Dialect::ParseOpHook>
+std::optional<Dialect::ParseOpHook>
 TestDialect::getParseOperationHook(StringRef opName) const {
   if (opName == "test.dialect_custom_printer") {
     return ParseOpHook{[](OpAsmParser &parser, OperationState &state) {
@@ -569,7 +569,8 @@ void FoldToCallOp::getCanonicalizationPatterns(RewritePatternSet &results,
 // Parsing
 
 static ParseResult parseCustomOptionalOperand(
-    OpAsmParser &parser, Optional<OpAsmParser::UnresolvedOperand> &optOperand) {
+    OpAsmParser &parser,
+    std::optional<OpAsmParser::UnresolvedOperand> &optOperand) {
   if (succeeded(parser.parseOptionalLParen())) {
     optOperand.emplace();
     if (parser.parseOperand(*optOperand) || parser.parseRParen())
@@ -580,7 +581,7 @@ static ParseResult parseCustomOptionalOperand(
 
 static ParseResult parseCustomDirectiveOperands(
     OpAsmParser &parser, OpAsmParser::UnresolvedOperand &operand,
-    Optional<OpAsmParser::UnresolvedOperand> &optOperand,
+    std::optional<OpAsmParser::UnresolvedOperand> &optOperand,
     SmallVectorImpl<OpAsmParser::UnresolvedOperand> &varOperands) {
   if (parser.parseOperand(operand))
     return failure();
@@ -633,7 +634,7 @@ parseCustomDirectiveWithTypeRefs(OpAsmParser &parser, Type operandType,
 }
 static ParseResult parseCustomDirectiveOperandsAndTypes(
     OpAsmParser &parser, OpAsmParser::UnresolvedOperand &operand,
-    Optional<OpAsmParser::UnresolvedOperand> &optOperand,
+    std::optional<OpAsmParser::UnresolvedOperand> &optOperand,
     SmallVectorImpl<OpAsmParser::UnresolvedOperand> &varOperands,
     Type &operandType, Type &optOperandType,
     SmallVectorImpl<Type> &varOperandTypes) {
@@ -686,7 +687,8 @@ static ParseResult parseCustomDirectiveAttrDict(OpAsmParser &parser,
   return parser.parseOptionalAttrDict(attrs);
 }
 static ParseResult parseCustomDirectiveOptionalOperandRef(
-    OpAsmParser &parser, Optional<OpAsmParser::UnresolvedOperand> &optOperand) {
+    OpAsmParser &parser,
+    std::optional<OpAsmParser::UnresolvedOperand> &optOperand) {
   int64_t operandCount = 0;
   if (parser.parseInteger(operandCount))
     return failure();
@@ -1119,7 +1121,7 @@ OpFoldResult TestPassthroughFold::fold(ArrayRef<Attribute> operands) {
 }
 
 LogicalResult OpWithInferTypeInterfaceOp::inferReturnTypes(
-    MLIRContext *, Optional<Location> location, ValueRange operands,
+    MLIRContext *, std::optional<Location> location, ValueRange operands,
     DictionaryAttr attributes, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
   if (operands[0].getType() != operands[1].getType()) {
@@ -1134,7 +1136,7 @@ LogicalResult OpWithInferTypeInterfaceOp::inferReturnTypes(
 // TODO: We should be able to only define either inferReturnType or
 // refineReturnType, currently only refineReturnType can be omitted.
 LogicalResult OpWithRefineTypeInterfaceOp::inferReturnTypes(
-    MLIRContext *context, Optional<Location> location, ValueRange operands,
+    MLIRContext *context, std::optional<Location> location, ValueRange operands,
     DictionaryAttr attributes, RegionRange regions,
     SmallVectorImpl<Type> &returnTypes) {
   returnTypes.clear();
@@ -1143,7 +1145,7 @@ LogicalResult OpWithRefineTypeInterfaceOp::inferReturnTypes(
 }
 
 LogicalResult OpWithRefineTypeInterfaceOp::refineReturnTypes(
-    MLIRContext *, Optional<Location> location, ValueRange operands,
+    MLIRContext *, std::optional<Location> location, ValueRange operands,
     DictionaryAttr attributes, RegionRange regions,
     SmallVectorImpl<Type> &returnTypes) {
   if (operands[0].getType() != operands[1].getType()) {
@@ -1162,8 +1164,8 @@ LogicalResult OpWithRefineTypeInterfaceOp::refineReturnTypes(
 }
 
 LogicalResult OpWithShapedTypeInferTypeInterfaceOp::inferReturnTypeComponents(
-    MLIRContext *context, Optional<Location> location, ValueShapeRange operands,
-    DictionaryAttr attributes, RegionRange regions,
+    MLIRContext *context, std::optional<Location> location,
+    ValueShapeRange operands, DictionaryAttr attributes, RegionRange regions,
     SmallVectorImpl<ShapedTypeComponents> &inferredReturnShapes) {
   // Create return type consisting of the last element of the first operand.
   auto operandType = operands.front().getType();
@@ -1171,8 +1173,7 @@ LogicalResult OpWithShapedTypeInferTypeInterfaceOp::inferReturnTypeComponents(
   if (!sval) {
     return emitOptionalError(location, "only shaped type operands allowed");
   }
-  int64_t dim =
-      sval.hasRank() ? sval.getShape().front() : ShapedType::kDynamic;
+  int64_t dim = sval.hasRank() ? sval.getShape().front() : ShapedType::kDynamic;
   auto type = IntegerType::get(context, 17);
   inferredReturnShapes.push_back(ShapedTypeComponents({dim}, type));
   return success();
@@ -1441,13 +1442,14 @@ ParseResult RegionIfOp::parse(OpAsmParser &parser, OperationState &result) {
                                 parser.getCurrentLocation(), result.operands);
 }
 
-OperandRange RegionIfOp::getSuccessorEntryOperands(Optional<unsigned> index) {
+OperandRange
+RegionIfOp::getSuccessorEntryOperands(std::optional<unsigned> index) {
   assert(index && *index < 2 && "invalid region index");
   return getOperands();
 }
 
 void RegionIfOp::getSuccessorRegions(
-    Optional<unsigned> index, ArrayRef<Attribute> operands,
+    std::optional<unsigned> index, ArrayRef<Attribute> operands,
     SmallVectorImpl<RegionSuccessor> &regions) {
   // We always branch to the join region.
   if (index.has_value()) {
@@ -1474,7 +1476,7 @@ void RegionIfOp::getRegionInvocationBounds(
 // AnyCondOp
 //===----------------------------------------------------------------------===//
 
-void AnyCondOp::getSuccessorRegions(Optional<unsigned> index,
+void AnyCondOp::getSuccessorRegions(std::optional<unsigned> index,
                                     ArrayRef<Attribute> operands,
                                     SmallVectorImpl<RegionSuccessor> &regions) {
   // The parent op branches into the only region, and the region branches back

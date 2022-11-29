@@ -261,7 +261,7 @@ def Arith_AddUICarryOp : Arith_Op<"addui_carry", [Pure, Commutative,
   let hasFolder = 1;
 
   let extraClassDeclaration = [{
-    ::llvm::Optional<::llvm::SmallVector<int64_t, 4>> getShapeForUnroll();
+    ::std::optional<::llvm::SmallVector<int64_t, 4>> getShapeForUnroll();
   }];
 }
 

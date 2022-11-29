@@ -595,7 +595,7 @@ SuccessorOperands SwitchOp::getSuccessorOperands(unsigned index) {
 }
 
 Block *SwitchOp::getSuccessorForOperands(ArrayRef<Attribute> operands) {
-  Optional<DenseIntElementsAttr> caseValues = getCaseValues();
+  auto caseValues = getCaseValues();
 
   if (!caseValues)
     return getDefaultDestination();
@@ -805,7 +805,7 @@ simplifySwitchFromSwitchOnSameCondition(SwitchOp op,
   SuccessorRange predDests = predSwitch.getCaseDestinations();
   auto it = llvm::find(predDests, currentBlock);
   if (it != predDests.end()) {
-    Optional<DenseIntElementsAttr> predCaseValues = predSwitch.getCaseValues();
+    auto predCaseValues = predSwitch.getCaseValues();
     foldSwitch(op, rewriter,
                predCaseValues->getValues<APInt>()[it - predDests.begin()]);
   } else {

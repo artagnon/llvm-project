@@ -74,10 +74,10 @@ struct CoefficientVector {
   }
 
   ArrayRef<int64_t> getCoefficients() const { return coefficients; }
-  constexpr int64_t getConstant() const {
+  int64_t getConstant() const {
     return coefficients[info.getConstantIdx()];
   }
-  constexpr size_t size() const { return coefficients.size(); }
+  size_t size() const { return coefficients.size(); }
   operator ArrayRef<int64_t>() const { return coefficients; }
   void resize(size_t size) { coefficients.resize(size); }
   operator bool() const {
@@ -148,7 +148,7 @@ struct CoefficientVector {
     return gcd;
   }
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-  constexpr bool hasMultipleCoefficients() const {
+  bool hasMultipleCoefficients() const {
     return count_if(coefficients, [](auto &coeff) { return coeff; }) > 1;
   }
   LLVM_DUMP_METHOD void dump() const;
@@ -223,18 +223,18 @@ struct PureAffineExprImpl {
 
   constexpr bool isMod() const { return kind == DivKind::Mod; }
   constexpr bool hasDivisor() const { return divisor != 1; }
-  constexpr bool isLinear() const {
+  bool isLinear() const {
     return nestedDivTerms.empty() && !hasDivisor();
   }
   constexpr int64_t getDivisor() const { return divisor; }
   constexpr int64_t getMulFactor() const { return mulFactor; }
-  constexpr bool isConstant() const {
+  bool isConstant() const {
     return nestedDivTerms.empty() && getLinearDividend().isConstant();
   }
-  constexpr int64_t getConstant() const {
+  int64_t getConstant() const {
     return getLinearDividend().getConstant();
   }
-  constexpr size_t hash() const {
+  size_t hash() const {
     return std::hash<const PureAffineExprImpl *>{}(this);
   }
   ArrayRef<PureAffineExpr> getNestedDivTerms() const { return nestedDivTerms; }

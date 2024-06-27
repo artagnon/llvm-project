@@ -33,7 +33,6 @@ public:
   const char *getBufferBegin() { return curBuffer.data(); }
 
 private:
-  // Helpers.
   Token formToken(Token::Kind kind, const char *tokStart) {
     return Token(kind, StringRef(tokStart, curPtr - tokStart));
   }
@@ -41,7 +40,6 @@ private:
   Token emitError(const char *loc, const llvm::Twine &message);
 
   // Lexer implementation methods.
-  Token lexAtIdentifier(const char *tokStart);
   Token lexBareIdentifierOrKeyword(const char *tokStart);
   Token lexNumber(const char *tokStart);
 

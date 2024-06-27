@@ -12,10 +12,7 @@
 
 #include "Lexer.h"
 #include "Token.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/Support/SourceMgr.h"
 
 using namespace mlir::presburger;
 
@@ -25,7 +22,6 @@ Lexer::Lexer(const llvm::SourceMgr &sourceMgr) : sourceMgr(sourceMgr) {
   curPtr = curBuffer.begin();
 }
 
-/// emitError - Emit an error message and return an Token::error token.
 Token Lexer::emitError(const char *loc, const llvm::Twine &message) {
   sourceMgr.PrintMessage(SMLoc::getFromPointer(loc), llvm::SourceMgr::DK_Error,
                          message);
@@ -36,14 +32,11 @@ Token Lexer::lexToken() {
   while (true) {
     const char *tokStart = curPtr;
 
-    // Lex the next token.
     switch (*curPtr++) {
     default:
       // Handle bare identifiers.
       if (isalpha(curPtr[-1]))
         return lexBareIdentifierOrKeyword(tokStart);
-
-      // Unknown character, emit an error.
       return emitError(tokStart, "unexpected character");
 
     case ' ':
@@ -53,16 +46,12 @@ Token Lexer::lexToken() {
       // Handle whitespace.
       continue;
 
-    case '_':
-      // Handle bare identifiers.
-      return lexBareIdentifierOrKeyword(tokStart);
-
     case 0:
-      // This may either be a nul character in the source file or may be the EOF
-      // marker that llvm::MemoryBuffer guarantees will be there.
+      // This may be the EOF marker that llvm::MemoryBuffer guarantees will be
+      // there.
       if (curPtr - 1 == curBuffer.end())
         return formToken(Token::eof, tokStart);
-      continue;
+      return emitError(tokStart, "unexpected character");
 
     case ':':
       return formToken(Token::colon, tokStart);
@@ -114,7 +103,6 @@ Token Lexer::lexToken() {
 /// Lex a bare identifier or keyword that starts with a letter.
 ///
 ///   bare-id ::= (letter|[_]) (letter|digit|[_$.])*
-///   integer-type ::= `[su]?i[1-9][0-9]*`
 ///
 Token Lexer::lexBareIdentifierOrKeyword(const char *tokStart) {
   // Match the rest of the identifier regex: [0-9a-zA-Z_.$]*
@@ -124,18 +112,6 @@ Token Lexer::lexBareIdentifierOrKeyword(const char *tokStart) {
 
   // Check to see if this identifier is a keyword.
   StringRef spelling(tokStart, curPtr - tokStart);
-
-  auto isAllDigit = [](StringRef str) {
-    return llvm::all_of(str, llvm::isDigit);
-  };
-
-  // Check for i123, si456, ui789.
-  if ((spelling.size() > 1 && tokStart[0] == 'i' &&
-       isAllDigit(spelling.drop_front())) ||
-      ((spelling.size() > 2 && tokStart[1] == 'i' &&
-        (tokStart[0] == 's' || tokStart[0] == 'u')) &&
-       isAllDigit(spelling.drop_front(2))))
-    return Token(Token::inttype, spelling);
 
   Token::Kind kind = llvm::StringSwitch<Token::Kind>(spelling)
 #define TOK_KEYWORD(SPELLING) .Case(#SPELLING, Token::kw_##SPELLING)
@@ -147,8 +123,7 @@ Token Lexer::lexBareIdentifierOrKeyword(const char *tokStart) {
 
 /// Lex a number literal.
 ///
-///   integer-literal ::= digit+ | `0x` hex_digit+
-///   float-literal ::= [-+]?[0-9]+[.][0-9]*([eE][-+]?[0-9]+)?
+///   integer-literal ::= digit+
 ///
 Token Lexer::lexNumber(const char *tokStart) {
   assert(isdigit(curPtr[-1]));

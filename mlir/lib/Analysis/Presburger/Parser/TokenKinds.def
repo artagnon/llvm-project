@@ -42,7 +42,6 @@ TOK_IDENTIFIER(bare_identifier)        // foo
 
 // Literals
 TOK_LITERAL(integer)      // 42
-TOK_LITERAL(inttype)      // i4, si8, ui16
 
 // Punctuation.
 TOK_PUNCTUATION(arrow, "->")

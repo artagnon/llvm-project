@@ -21,8 +21,7 @@ using llvm::MemoryBuffer;
 using llvm::SourceMgr;
 
 static bool isIdentifier(const Token &token) {
-  return token.isAny(Token::bare_identifier, Token::inttype) ||
-         token.isKeyword();
+  return token.is(Token::bare_identifier) || token.isKeyword();
 }
 
 bool ParserImpl::parseToken(Token::Kind expectedToken, const Twine &message) {

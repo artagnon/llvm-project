@@ -24,7 +24,7 @@ public:
   IntMatrix flatMatrix;
 
   // We maintain a set of divs that we have seen while flattening. The size of
-  // this set we at most info.numDivs, hitting info.numDivs at the end of the
+  // this set is at most info.numDivs, hitting info.numDivs at the end of the
   // flattening, if that expression contains all the possible divs.
   SmallSetVector<size_t, 4> localExprs;
 

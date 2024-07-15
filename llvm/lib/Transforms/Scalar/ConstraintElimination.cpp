@@ -57,6 +57,10 @@ static cl::opt<unsigned>
     MaxRows("constraint-elimination-max-rows", cl::init(500), cl::Hidden,
             cl::desc("Maximum number of rows to keep in constraint system"));
 
+static cl::opt<unsigned>
+    MaxColumns("constraint-elimination-max-cols", cl::init(50), cl::Hidden,
+            cl::desc("Maximum number of columns to keep in constraint system"));
+
 static cl::opt<bool> DumpReproducers(
     "constraint-elimination-dump-reproducers", cl::init(false), cl::Hidden,
     cl::desc("Dump IR to reproduce successful transformations."));
@@ -274,7 +278,8 @@ class ConstraintInfo {
 
 public:
   ConstraintInfo(const DataLayout &DL, ArrayRef<Value *> FunctionArgs)
-      : UnsignedCS(FunctionArgs), SignedCS(FunctionArgs), DL(DL) {
+      : UnsignedCS(FunctionArgs, MaxColumns),
+        SignedCS(FunctionArgs, MaxColumns), DL(DL) {
     auto &Value2Index = getValue2Index(false);
     // Add Arg > -1 constraints to unsigned system for all function arguments.
     for (Value *Arg : FunctionArgs) {
@@ -894,7 +899,7 @@ void ConstraintInfo::transferToOtherSystem(
 
 static void dumpConstraint(ArrayRef<int64_t> C,
                            const DenseMap<Value *, unsigned> &Value2Index) {
-  ConstraintSystem CS(Value2Index);
+  ConstraintSystem CS(Value2Index, C.size());
   CS.addVariableRowFill(C);
   CS.dump();
 }

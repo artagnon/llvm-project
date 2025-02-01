@@ -12,56 +12,10 @@ define void @replicate_udiv_with_only_first_lane_used(i32 %x, ptr %dst, i64 %d) 
 ; CHECK-NEXT:    [[C:%.*]] = icmp eq i32 [[X]], 10
 ; CHECK-NEXT:    br i1 false, label %[[SCALAR_PH:.*]], label %[[VECTOR_PH:.*]]
 ; CHECK:       [[VECTOR_PH]]:
+; CHECK-NEXT:    [[TMP11:%.*]] = getelementptr i16, ptr [[DST]], i64 0
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_UDIV_CONTINUE14:.*]] ]
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF:.*]], label %[[PRED_UDIV_CONTINUE:.*]]
-; CHECK:       [[PRED_UDIV_IF]]:
-; CHECK-NEXT:    [[TMP0:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
-; CHECK:       [[PRED_UDIV_CONTINUE]]:
-; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ], [ [[TMP0]], %[[PRED_UDIV_IF]] ]
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF1:.*]], label %[[PRED_UDIV_CONTINUE2:.*]]
-; CHECK:       [[PRED_UDIV_IF1]]:
-; CHECK-NEXT:    [[TMP2:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE2]]
-; CHECK:       [[PRED_UDIV_CONTINUE2]]:
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF3:.*]], label %[[PRED_UDIV_CONTINUE4:.*]]
-; CHECK:       [[PRED_UDIV_IF3]]:
-; CHECK-NEXT:    [[TMP3:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE4]]
-; CHECK:       [[PRED_UDIV_CONTINUE4]]:
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF5:.*]], label %[[PRED_UDIV_CONTINUE6:.*]]
-; CHECK:       [[PRED_UDIV_IF5]]:
-; CHECK-NEXT:    [[TMP4:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE6]]
-; CHECK:       [[PRED_UDIV_CONTINUE6]]:
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF7:.*]], label %[[PRED_UDIV_CONTINUE8:.*]]
-; CHECK:       [[PRED_UDIV_IF7]]:
-; CHECK-NEXT:    [[TMP5:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE8]]
-; CHECK:       [[PRED_UDIV_CONTINUE8]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i64 [ poison, %[[PRED_UDIV_CONTINUE6]] ], [ [[TMP5]], %[[PRED_UDIV_IF7]] ]
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF9:.*]], label %[[PRED_UDIV_CONTINUE10:.*]]
-; CHECK:       [[PRED_UDIV_IF9]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE10]]
-; CHECK:       [[PRED_UDIV_CONTINUE10]]:
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF11:.*]], label %[[PRED_UDIV_CONTINUE12:.*]]
-; CHECK:       [[PRED_UDIV_IF11]]:
-; CHECK-NEXT:    [[TMP8:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE12]]
-; CHECK:       [[PRED_UDIV_CONTINUE12]]:
-; CHECK-NEXT:    br i1 false, label %[[PRED_UDIV_IF13:.*]], label %[[PRED_UDIV_CONTINUE14]]
-; CHECK:       [[PRED_UDIV_IF13]]:
-; CHECK-NEXT:    [[TMP9:%.*]] = udiv i64 99, [[D]]
-; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE14]]
-; CHECK:       [[PRED_UDIV_CONTINUE14]]:
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i64 0, i64 [[TMP1]]
-; CHECK-NEXT:    [[PREDPHI15:%.*]] = select i1 true, i64 0, i64 [[TMP6]]
-; CHECK-NEXT:    [[TMP10:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI]]
-; CHECK-NEXT:    [[TMP11:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI15]]
-; CHECK-NEXT:    store i16 0, ptr [[TMP10]], align 2
+; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[VECTOR_BODY]] ]
 ; CHECK-NEXT:    store i16 0, ptr [[TMP11]], align 2
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 8
 ; CHECK-NEXT:    [[TMP12:%.*]] = icmp eq i64 [[INDEX_NEXT]], 96

@@ -953,7 +953,6 @@ bool IndVarSimplify::linearFunctionTestReplace(
     Instruction *IncVar, bool UsePostInc, SCEVExpander &Rewriter) {
   assert(isLoopCounter(IndVar, L, SE));
 
-  // Initialize CmpIndVar to the preincremented IV.
   Value *CmpIndVar = UsePostInc ? IncVar : IndVar;
 
   // It may be necessary to drop nowrap flags on the incrementing instruction

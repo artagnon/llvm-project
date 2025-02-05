@@ -155,8 +155,8 @@ class IndVarSimplify {
 
   bool linearFunctionTestReplace(Loop *L, BasicBlock *ExitingBB,
                                  const SCEV *ExitCount, PHINode *IndVar,
-                                 Instruction *IncVar, bool UsePostInc,
-                                 SCEVExpander &Rewriter);
+                                 Instruction *IncVar, const SCEV *IVLimit,
+                                 bool UsePostInc, SCEVExpander &Rewriter);
 
   bool sinkUnusedInvariants(Loop *L);
 
@@ -928,21 +928,6 @@ static const SCEV *getIVLimit(PHINode *IndVar, const SCEV *ExitCount,
   return AR->evaluateAtIteration(ExitCount, *SE);
 }
 
-/// Insert an IR expression which computes the value held by the IV IndVar
-/// (which must be an loop counter w/unit stride) after the backedge of loop L
-/// is taken ExitCount times.
-static Value *genLoopLimit(PHINode *IndVar, BasicBlock *ExitingBB,
-                           const SCEV *ExitCount, bool UsePostInc, Loop *L,
-                           SCEVExpander &Rewriter, ScalarEvolution *SE) {
-  assert(isLoopCounter(IndVar, L, SE));
-  assert(ExitCount->getType()->isIntegerTy() && "exit count must be integer");
-  const SCEV *IVLimit = getIVLimit(IndVar, ExitCount, UsePostInc, SE);
-  assert(SE->isLoopInvariant(IVLimit, L) &&
-         "Computed iteration count is not loop invariant!");
-  return Rewriter.expandCodeFor(IVLimit, IVLimit->getType(),
-                                ExitingBB->getTerminator());
-}
-
 /// This method rewrites the exit condition of the loop to be a canonical !=
 /// comparison against the incremented loop induction variable.  This pass is
 /// able to rewrite the exit tests of any loop where the SCEV analysis can
@@ -950,7 +935,8 @@ static Value *genLoopLimit(PHINode *IndVar, BasicBlock *ExitingBB,
 /// broader range than just linear tests.
 bool IndVarSimplify::linearFunctionTestReplace(
     Loop *L, BasicBlock *ExitingBB, const SCEV *ExitCount, PHINode *IndVar,
-    Instruction *IncVar, bool UsePostInc, SCEVExpander &Rewriter) {
+    Instruction *IncVar, const SCEV *IVLimit, bool UsePostInc,
+    SCEVExpander &Rewriter) {
   assert(isLoopCounter(IndVar, L, SE));
 
   Value *CmpIndVar = UsePostInc ? IncVar : IndVar;
@@ -975,8 +961,11 @@ bool IndVarSimplify::linearFunctionTestReplace(
       BO->setHasNoSignedWrap(AR->hasNoSignedWrap());
   }
 
-  Value *ExitCnt =
-      genLoopLimit(IndVar, ExitingBB, ExitCount, UsePostInc, L, Rewriter, SE);
+  assert(ExitCount->getType()->isIntegerTy() && "exit count must be integer");
+  assert(SE->isLoopInvariant(IVLimit, L) &&
+         "Computed iteration count is not loop invariant!");
+  Value *ExitCnt = Rewriter.expandCodeFor(IVLimit, IVLimit->getType(),
+                                          ExitingBB->getTerminator());
   assert(ExitCnt->getType()->isPointerTy() ==
              IndVar->getType()->isPointerTy() &&
          "genLoopLimit missed a cast");
@@ -2010,8 +1999,9 @@ bool IndVarSimplify::run(Loop *L) {
       if (!Rewriter.isSafeToExpand(IVLimit))
         continue;
 
-      Changed |= linearFunctionTestReplace(L, ExitingBB, ExitCount, IndVar,
-                                           IncVar, UsePostInc, Rewriter);
+      Changed |=
+          linearFunctionTestReplace(L, ExitingBB, ExitCount, IndVar, IncVar,
+                                    IVLimit, UsePostInc, Rewriter);
     }
   }
   // Clear the rewriter cache, because values that are in the rewriter's cache

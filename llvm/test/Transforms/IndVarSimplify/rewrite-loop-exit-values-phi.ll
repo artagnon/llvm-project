@@ -24,7 +24,7 @@ define dso_local void @hoge() local_unnamed_addr {
 ; CHECK:       inner:
 ; CHECK-NEXT:    [[I:%.*]] = phi i64 [ [[I_NEXT:%.*]], [[INNER]] ], [ 0, [[INNER_PREHEADER]] ]
 ; CHECK-NEXT:    [[J:%.*]] = phi i64 [ [[J_NEXT:%.*]], [[INNER]] ], [ [[N]], [[INNER_PREHEADER]] ]
-; CHECK-NEXT:    [[I_NEXT]] = add nuw i64 [[I]], 1
+; CHECK-NEXT:    [[I_NEXT]] = add nuw nsw i64 [[I]], 1
 ; CHECK-NEXT:    [[J_NEXT]] = add nsw i64 [[J]], 1
 ; CHECK-NEXT:    store i64 undef, ptr @ptr, align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp slt i64 [[J]], [[IDX]]

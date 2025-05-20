@@ -35,7 +35,7 @@
 // following: in such fields, polynomial addition and subtraction are identical
 // and equivalent to XOR, polynomial multiplication is an AND, and polynomial
 // division is identity: the XOR and AND operations in unoptimized
-// implmentations are performed bit-wise, and can be optimized to be performed
+// implementations are performed bit-wise, and can be optimized to be performed
 // chunk-wise, by interleaving copies of the generating polynomial, and storing
 // the pre-computed values in a table.
 //
@@ -87,11 +87,10 @@ using PhiStepPair = std::pair<const PHINode *, const Instruction *>;
 /// given trip count, and predication is specialized for a significant-bit
 /// check.
 class ValueEvolution {
-  unsigned TripCount;
-  bool ByteOrderSwapped;
+  const unsigned TripCount;
+  const bool ByteOrderSwapped;
   APInt GenPoly;
   StringRef ErrStr;
-  unsigned AtIteration;
 
   KnownBits computeBinOp(const BinaryOperator *I, const KnownPhiMap &KnownPhis);
   KnownBits computeInstr(const Instruction *I, const KnownPhiMap &KnownPhis);
@@ -182,8 +181,8 @@ KnownBits ValueEvolution::computeInstr(const Instruction *I,
   if (const PHINode *P = dyn_cast<PHINode>(I))
     return KnownPhis.lookup_or(P, BitWidth);
 
-  // Compute the KnownBits for a Select(Cmp()), forcing it to take the take the
-  // branch that is predicated on the (least|most)-significant-bit check.
+  // Compute the KnownBits for a Select(Cmp()), forcing it to take the branch
+  // that is predicated on the (least|most)-significant-bit check.
   CmpPredicate Pred;
   Value *L, *R, *TV, *FV;
   if (match(I, m_Select(m_ICmp(Pred, m_Value(L), m_Value(R)), m_Value(TV),
@@ -239,8 +238,6 @@ KnownBits ValueEvolution::computeInstr(const Instruction *I,
 /// Compute the KnownBits of Value \p V.
 KnownBits ValueEvolution::compute(const Value *V,
                                   const KnownPhiMap &KnownPhis) {
-  unsigned BitWidth = V->getType()->getScalarSizeInBits();
-
   const APInt *C;
   if (match(V, m_APInt(C)))
     return KnownBits::makeConstant(*C);
@@ -249,6 +246,7 @@ KnownBits ValueEvolution::compute(const Value *V,
     return computeInstr(I, KnownPhis);
 
   ErrStr = "Unknown Value";
+  unsigned BitWidth = V->getType()->getScalarSizeInBits();
   return {BitWidth};
 }
 
@@ -258,7 +256,6 @@ std::optional<KnownPhiMap>
 ValueEvolution::computeEvolutions(ArrayRef<PhiStepPair> PhiEvolutions) {
   KnownPhiMap KnownPhis;
   for (unsigned I = 0; I < TripCount; ++I) {
-    AtIteration = I;
     for (auto [Phi, Step] : PhiEvolutions) {
       KnownBits KnownAtIter = computeInstr(Step, KnownPhis);
       if (KnownAtIter.getBitWidth() < I + 1) {
@@ -320,8 +317,8 @@ digRecurrence(Instruction *V, const PHINode *P, const Loop &L,
 /// \p ExtraConst is relevant if \p BOWithConstOpToMatch is supplied: when
 /// digging the use-def chain, a BinOp with opcode \p BOWithConstOpToMatch is
 /// matched, and \p ExtraConst is a constant operand of that BinOp. This
-/// peculiary exists, because in a CRC algorithm, the \p BOWithConstOpToMatch is
-/// an XOR, and the \p ExtraConst ends up being the generating polynomial.
+/// peculiarity exists, because in a CRC algorithm, the \p BOWithConstOpToMatch
+/// is an XOR, and the \p ExtraConst ends up being the generating polynomial.
 static bool matchConditionalRecurrence(
     const PHINode *P, BinaryOperator *&BO, Value *&Start, Value *&Step,
     const Loop &L, const APInt *&ExtraConst,
@@ -434,9 +431,9 @@ PolynomialInfo::PolynomialInfo(unsigned TripCount, const Value *LHS,
     : TripCount(TripCount), LHS(LHS), RHS(RHS), ComputedValue(ComputedValue),
       ByteOrderSwapped(ByteOrderSwapped), LHSAux(LHSAux) {}
 
-/// In big-endian case, checks that bottom N bits against CheckFn, and that the
-/// rest are unknown. In little-endian case, checks that the top N bits against
-/// CheckFn, and that the rest are unknown.
+/// In big-endian case, checks that the bottom N bits against CheckFn, and that
+/// the rest are unknown. In little-endian case, checks that the top N bits
+/// against CheckFn, and that the rest are unknown.
 static bool checkExtractBits(const KnownBits &Known, unsigned N,
                              function_ref<bool(const KnownBits &)> CheckFn,
                              bool ByteOrderSwapped) {
@@ -459,7 +456,6 @@ static bool checkExtractBits(const KnownBits &Known, unsigned N,
 CRCTable HashRecognize::genSarwateTable(const APInt &GenPoly,
                                         bool ByteOrderSwapped) const {
   unsigned BW = GenPoly.getBitWidth();
-  unsigned MSB = 1 << (BW - 1);
   CRCTable Table;
   Table[0] = APInt::getZero(BW);
 
@@ -467,7 +463,7 @@ CRCTable HashRecognize::genSarwateTable(const APInt &GenPoly,
     APInt CRCInit(BW, 1);
     for (unsigned I = 1; I < 256; I <<= 1) {
       CRCInit = CRCInit.shl(1) ^
-                ((CRCInit & MSB).isZero() ? APInt::getZero(BW) : GenPoly);
+                (CRCInit.isSignBitSet() ? GenPoly : APInt::getZero(BW));
       for (unsigned J = 0; J < I; ++J)
         Table[I + J] = CRCInit ^ Table[J];
     }
@@ -476,8 +472,7 @@ CRCTable HashRecognize::genSarwateTable(const APInt &GenPoly,
 
   APInt CRCInit(BW, 128);
   for (unsigned I = 128; I; I >>= 1) {
-    CRCInit = CRCInit.lshr(1) ^
-              ((CRCInit & 1).isZero() ? APInt::getZero(BW) : GenPoly);
+    CRCInit = CRCInit.lshr(1) ^ (CRCInit[0] ? GenPoly : APInt::getZero(BW));
     for (unsigned J = 0; J < 256; J += (I << 1))
       Table[I + J] = CRCInit ^ Table[J];
   }
@@ -597,8 +592,6 @@ HashRecognize::recognizeCRC() const {
   if (SimpleRecurrence)
     PhiEvolutions.emplace_back(SimpleRecurrence->Phi, SimpleRecurrence->BO);
 
-  const Value *LHSAux = SimpleRecurrence ? SimpleRecurrence->Start : nullptr;
-
   ValueEvolution VE(TC, ByteOrderSwapped);
   std::optional<KnownPhiMap> KnownPhis = VE.computeEvolutions(PhiEvolutions);
 
@@ -610,6 +603,7 @@ HashRecognize::recognizeCRC() const {
   if (!checkExtractBits(ResultBits, TC, IsZero, ByteOrderSwapped))
     return ErrBits(ResultBits, TC, ByteOrderSwapped);
 
+  const Value *LHSAux = SimpleRecurrence ? SimpleRecurrence->Start : nullptr;
   return PolynomialInfo(TC, ConditionalRecurrence->Start, GenPoly,
                         ComputedValue, ByteOrderSwapped, LHSAux);
 }

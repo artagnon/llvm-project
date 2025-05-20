@@ -37,12 +37,33 @@ struct CRCTable : public std::array<APInt, 256> {
 /// The structure that is returned when a polynomial algorithm was recognized by
 /// the analysis. Currently, only the CRC algorithm is recognized.
 struct PolynomialInfo {
+  // The small constant trip-count of the analyzed loop.
   unsigned TripCount;
+
+  // The LHS in a polynomial operation, or the initial variable of the
+  // computation, since all polynomial operations must have a constant RHS,
+  // which is the generating polynomial. It is the LHS of the polynomial
+  // division in the case of CRC. Since polynomial division is an XOR in
+  // GF(2^m), this variable must be XOR'ed with RHS in a loop to yield the
+  // ComputedValue.
   const Value *LHS;
+
+  // The generating polynomial, or the RHS of the polynomial division in the
+  // case of CRC.
   APInt RHS;
+
+  // The final computed value. This is a remainder of a polynomial division in
+  // the case of CRC, which must be zero.
   const Value *ComputedValue;
+
+  // Set to true in the case of big-endian.
   bool ByteOrderSwapped;
+
+  // An optional auxiliary checksum that augments the LHS. In the case of CRC,
+  // it is XOR'ed with the LHS, so that the computation's final remainder is
+  // zero.
   const Value *LHSAux;
+
   PolynomialInfo(unsigned TripCount, const Value *LHS, const APInt &RHS,
                  const Value *ComputedValue, bool ByteOrderSwapped,
                  const Value *LHSAux = nullptr);

@@ -332,8 +332,8 @@ exit:                                              ; preds = %outer.loop
   ret i8 %crc.outer
 }
 
-define i32 @crc16.le.tc8.data32(i32 %checksum, i32 %msg) {
-; CHECK-LABEL: 'crc16.le.tc8.data32'
+define i32 @crc32.le.tc8.data32(i32 %checksum, i32 %msg) {
+; CHECK-LABEL: 'crc32.le.tc8.data32'
 ; CHECK-NEXT:  Found little-endian CRC-32 loop with trip count 8
 ; CHECK-NEXT:    Initial CRC: i32 %checksum
 ; CHECK-NEXT:    Generating polynomial: 33800

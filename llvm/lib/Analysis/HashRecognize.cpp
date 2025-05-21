@@ -59,7 +59,6 @@
 
 #include "llvm/Analysis/HashRecognize.h"
 #include "llvm/ADT/APInt.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -101,8 +100,8 @@ public:
 
   // In case ValueEvolution encounters an error, these are meant to be used for
   // a precise error message.
-  bool hasError() const;
-  StringRef getError() const;
+  bool hasError() const { return !ErrStr.empty(); }
+  StringRef getError() const { return ErrStr; }
 
   // Given a list of PHI nodes along with their incoming value from within the
   // loop, and the trip-count of the loop, computeEvolutions
@@ -114,14 +113,9 @@ public:
 ValueEvolution::ValueEvolution(unsigned TripCount, bool ByteOrderSwapped)
     : TripCount(TripCount), ByteOrderSwapped(ByteOrderSwapped) {}
 
-bool ValueEvolution::hasError() const { return !ErrStr.empty(); }
-StringRef ValueEvolution::getError() const { return ErrStr; }
-
 /// Compute the KnownBits of BinaryOperator \p I.
 KnownBits ValueEvolution::computeBinOp(const BinaryOperator *I,
                                        const KnownPhiMap &KnownPhis) {
-  unsigned BitWidth = I->getType()->getScalarSizeInBits();
-
   KnownBits KnownL(compute(I->getOperand(0), KnownPhis));
   KnownBits KnownR(compute(I->getOperand(1), KnownPhis));
 
@@ -167,6 +161,7 @@ KnownBits ValueEvolution::computeBinOp(const BinaryOperator *I,
     return KnownBits::srem(KnownL, KnownR);
   default:
     ErrStr = "Unknown BinaryOperator";
+    unsigned BitWidth = I->getType()->getScalarSizeInBits();
     return {BitWidth};
   }
 }
@@ -437,15 +432,14 @@ PolynomialInfo::PolynomialInfo(unsigned TripCount, const Value *LHS,
 static bool checkExtractBits(const KnownBits &Known, unsigned N,
                              function_ref<bool(const KnownBits &)> CheckFn,
                              bool ByteOrderSwapped) {
-  unsigned BitPos = ByteOrderSwapped ? 0 : Known.getBitWidth() - N;
-  unsigned SwappedBitPos = ByteOrderSwapped ? N : 0;
-
   // Check that the entire thing is a constant.
   if (N == Known.getBitWidth())
     return CheckFn(Known.extractBits(N, 0));
 
   // Check that the {top, bottom} N bits are not unknown and that the {bottom,
   // top} N bits are known.
+  unsigned BitPos = ByteOrderSwapped ? 0 : Known.getBitWidth() - N;
+  unsigned SwappedBitPos = ByteOrderSwapped ? N : 0;
   return CheckFn(Known.extractBits(N, BitPos)) &&
          Known.extractBits(Known.getBitWidth() - N, SwappedBitPos).isUnknown();
 }
@@ -545,7 +539,7 @@ HashRecognize::recognizeCRC() const {
   BasicBlock *Latch = L.getLoopLatch();
   BasicBlock *Exit = L.getExitBlock();
   const PHINode *IndVar = L.getCanonicalInductionVariable();
-  if (!Exit || !Latch || !IndVar)
+  if (!Latch || !Exit || !IndVar)
     return "Loop not in canonical form";
 
   auto [SimpleRecurrence, ConditionalRecurrence] =
@@ -556,20 +550,18 @@ HashRecognize::recognizeCRC() const {
 
   // Make sure that all recurrences are either all SCEVMul with two or SCEVDiv
   // with two, or in other words, that they're single bit-shifts.
-  SmallSet<std::optional<bool>, 2> EndianStatus;
-  for (auto Info : {SimpleRecurrence, ConditionalRecurrence})
-    if (Info)
-      EndianStatus.insert(isBigEndianBitShift(SE.getSCEV(Info->BO)));
-
-  if (EndianStatus.size() != 1 || !*EndianStatus.begin())
+  std::optional<bool> ByteOrderSwapped =
+      isBigEndianBitShift(SE.getSCEV(ConditionalRecurrence->BO));
+  if (!ByteOrderSwapped)
     return "Loop with non-unit bitshifts";
-
-  bool ByteOrderSwapped = **EndianStatus.begin();
-
-  if (SimpleRecurrence &&
-      !arePHIsIntertwined(SimpleRecurrence->Phi, ConditionalRecurrence->Phi, L,
-                          Instruction::BinaryOps::Xor))
-    return "Simple recurrence doesn't use conditional recurrence with XOR";
+  if (SimpleRecurrence) {
+    if (isBigEndianBitShift(SE.getSCEV(SimpleRecurrence->BO)) !=
+        ByteOrderSwapped)
+      return "Loop with non-unit bitshifts";
+    if (!arePHIsIntertwined(SimpleRecurrence->Phi, ConditionalRecurrence->Phi,
+                            L, Instruction::BinaryOps::Xor))
+      return "Simple recurrence doesn't use conditional recurrence with XOR";
+  }
 
   // Make sure that the computed value is used in the exit block: this should be
   // true even if it is only really used in an outer loop's exit block, since
@@ -592,7 +584,7 @@ HashRecognize::recognizeCRC() const {
   if (SimpleRecurrence)
     PhiEvolutions.emplace_back(SimpleRecurrence->Phi, SimpleRecurrence->BO);
 
-  ValueEvolution VE(TC, ByteOrderSwapped);
+  ValueEvolution VE(TC, *ByteOrderSwapped);
   std::optional<KnownPhiMap> KnownPhis = VE.computeEvolutions(PhiEvolutions);
 
   if (VE.hasError())
@@ -600,12 +592,12 @@ HashRecognize::recognizeCRC() const {
 
   KnownBits ResultBits = KnownPhis->at(ConditionalRecurrence->Phi);
   auto IsZero = [](const KnownBits &K) { return K.isZero(); };
-  if (!checkExtractBits(ResultBits, TC, IsZero, ByteOrderSwapped))
-    return ErrBits(ResultBits, TC, ByteOrderSwapped);
+  if (!checkExtractBits(ResultBits, TC, IsZero, *ByteOrderSwapped))
+    return ErrBits(ResultBits, TC, *ByteOrderSwapped);
 
   const Value *LHSAux = SimpleRecurrence ? SimpleRecurrence->Start : nullptr;
   return PolynomialInfo(TC, ConditionalRecurrence->Start, GenPoly,
-                        ComputedValue, ByteOrderSwapped, LHSAux);
+                        ComputedValue, *ByteOrderSwapped, LHSAux);
 }
 
 void CRCTable::print(raw_ostream &OS) const {

@@ -298,11 +298,13 @@ struct RecurrenceInfo {
   }
 
   bool matchSimpleRecurrence(const PHINode *P);
-  BinaryOperator *digRecurrence(
-      Instruction *V, const PHINode *P,
-      Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd);
   bool matchConditionalRecurrence(
       const PHINode *P,
+      Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd);
+
+private:
+  BinaryOperator *digRecurrence(
+      Instruction *V,
       Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd);
 };
 
@@ -329,7 +331,7 @@ bool RecurrenceInfo::matchSimpleRecurrence(const PHINode *P) {
 /// Digs for a recurrence starting with \p V hitting the PHI node in a use-def
 /// chain. Used by matchConditionalRecurrence.
 BinaryOperator *
-RecurrenceInfo::digRecurrence(Instruction *V, const PHINode *P,
+RecurrenceInfo::digRecurrence(Instruction *V,
                               Instruction::BinaryOps BOWithConstOpToMatch) {
   SmallVector<Instruction *> Worklist;
   Worklist.push_back(V);
@@ -395,8 +397,8 @@ bool RecurrenceInfo::matchConditionalRecurrence(
 
     // For a conditional recurrence, both the true and false values of the
     // select must ultimately end up in the same recurrent BinOp.
-    BinaryOperator *FoundBO = digRecurrence(TV, P, BOWithConstOpToMatch);
-    BinaryOperator *AltBO = digRecurrence(FV, P, BOWithConstOpToMatch);
+    BinaryOperator *FoundBO = digRecurrence(TV, BOWithConstOpToMatch);
+    BinaryOperator *AltBO = digRecurrence(FV, BOWithConstOpToMatch);
     if (!FoundBO || FoundBO != AltBO)
       return false;
 

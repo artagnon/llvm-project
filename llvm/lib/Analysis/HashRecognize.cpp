@@ -434,6 +434,8 @@ getRecurrences(BasicBlock *LoopLatch, const PHINode *IndVar, const Loop &L) {
       ConditionalRecurrence.matchConditionalRecurrence(
           &P, Instruction::BinaryOps::Xor);
   }
+  if (NumPhis == 3 && (!SimpleRecurrence || !ConditionalRecurrence))
+    return {};
   return std::make_pair(SimpleRecurrence, ConditionalRecurrence);
 }
 
@@ -469,9 +471,9 @@ CRCTable HashRecognize::genSarwateTable(const APInt &GenPoly,
   unsigned BW = GenPoly.getBitWidth();
   CRCTable Table;
   Table[0] = APInt::getZero(BW);
-  APInt CRCInit(BW, 1);
 
   if (ByteOrderSwapped) {
+    APInt CRCInit(BW, 128);
     for (unsigned I = 1; I < 256; I <<= 1) {
       CRCInit = CRCInit.shl(1) ^
                 (CRCInit.isSignBitSet() ? GenPoly : APInt::getZero(BW));
@@ -481,6 +483,7 @@ CRCTable HashRecognize::genSarwateTable(const APInt &GenPoly,
     return Table;
   }
 
+  APInt CRCInit(BW, 1);
   for (unsigned I = 128; I; I >>= 1) {
     CRCInit = CRCInit.lshr(1) ^ (CRCInit[0] ? GenPoly : APInt::getZero(BW));
     for (unsigned J = 0; J < 256; J += (I << 1))

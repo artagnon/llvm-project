@@ -263,12 +263,74 @@ ValueEvolution::computeEvolutions(ArrayRef<PhiStepPair> PhiEvolutions) {
   return KnownPhis;
 }
 
-/// Digs for a recurrence starting with \p V hitting the PHI node \p P in a
-/// use-def chain. Used by matchConditionalRecurrence.
-static BinaryOperator *
-digRecurrence(Instruction *V, const PHINode *P, const Loop &L,
-              const APInt *&ExtraConst,
-              Instruction::BinaryOps BOWithConstOpToMatch) {
+/// A structure that can hold either a Simple Recurrence or a Conditional
+/// Recurrence. Note that in the case of a Simple Recurrence, Step is an operand
+/// of the BO, while in a Conditional Recurrence, it is a SelectInst.
+struct RecurrenceInfo {
+  const Loop &L;
+  const PHINode *Phi = nullptr;
+  BinaryOperator *BO = nullptr;
+  Value *Start = nullptr;
+  Value *Step = nullptr;
+  std::optional<APInt> ExtraConst;
+
+  RecurrenceInfo(const Loop &L) : L(L) {}
+  operator bool() const { return BO; }
+
+  void print(raw_ostream &OS, unsigned Indent) const {
+    OS.indent(Indent) << "Phi: ";
+    Phi->print(OS);
+    OS << "\n";
+    OS.indent(Indent) << "BinaryOperator: ";
+    BO->print(OS);
+    OS << "\n";
+    OS.indent(Indent) << "Start: ";
+    Start->print(OS);
+    OS << "\n";
+    OS.indent(Indent) << "Step: ";
+    Step->print(OS);
+    OS << "\n";
+    if (ExtraConst) {
+      OS.indent(Indent) << "ExtraConst: ";
+      ExtraConst->print(OS, false);
+      OS << "\n";
+    }
+  }
+
+  bool matchSimpleRecurrence(const PHINode *P);
+  BinaryOperator *digRecurrence(
+      Instruction *V, const PHINode *P,
+      Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd);
+  bool matchConditionalRecurrence(
+      const PHINode *P,
+      Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd);
+};
+
+/// Wraps llvm::matchSimpleRecurrence. Match a simple first order recurrence
+/// cycle of the form:
+///
+/// loop:
+///    %rec = phi [%start, %entry], [%BO, %loop]
+///     ...
+///     %BO = binop %rec, %step
+///
+/// or
+///
+/// loop:
+///    %rec = phi [%start, %entry], [%BO, %loop]
+///    ...
+///    %BO = binop %step, %rec
+///
+bool RecurrenceInfo::matchSimpleRecurrence(const PHINode *P) {
+  Phi = P;
+  return llvm::matchSimpleRecurrence(Phi, BO, Start, Step);
+}
+
+/// Digs for a recurrence starting with \p V hitting the PHI node in a use-def
+/// chain. Used by matchConditionalRecurrence.
+BinaryOperator *
+RecurrenceInfo::digRecurrence(Instruction *V, const PHINode *P,
+                              Instruction::BinaryOps BOWithConstOpToMatch) {
   SmallVector<Instruction *> Worklist;
   Worklist.push_back(V);
   while (!Worklist.empty()) {
@@ -280,14 +342,16 @@ digRecurrence(Instruction *V, const PHINode *P, const Loop &L,
 
     // Find a recurrence over a BinOp, by matching either of its operands
     // with with the PHINode.
-    if (match(I, m_c_BinOp(m_Value(), m_Specific(P))))
+    if (match(I, m_c_BinOp(m_Value(), m_Specific(Phi))))
       return cast<BinaryOperator>(I);
 
     // Bind to ExtraConst, if we match exactly one.
     if (I->getOpcode() == BOWithConstOpToMatch) {
       if (ExtraConst)
         return nullptr;
-      match(I, m_c_BinOp(m_APInt(ExtraConst), m_Value()));
+      const APInt *C = nullptr;
+      if (match(I, m_c_BinOp(m_APInt(C), m_Value())))
+        ExtraConst = *C;
     }
 
     // Continue along the use-def chain.
@@ -314,16 +378,15 @@ digRecurrence(Instruction *V, const PHINode *P, const Loop &L,
 /// matched, and \p ExtraConst is a constant operand of that BinOp. This
 /// peculiarity exists, because in a CRC algorithm, the \p BOWithConstOpToMatch
 /// is an XOR, and the \p ExtraConst ends up being the generating polynomial.
-static bool matchConditionalRecurrence(
-    const PHINode *P, BinaryOperator *&BO, Value *&Start, Value *&Step,
-    const Loop &L, const APInt *&ExtraConst,
-    Instruction::BinaryOps BOWithConstOpToMatch = Instruction::BinaryOpsEnd) {
-  if (P->getNumIncomingValues() != 2)
+bool RecurrenceInfo::matchConditionalRecurrence(
+    const PHINode *P, Instruction::BinaryOps BOWithConstOpToMatch) {
+  Phi = P;
+  if (Phi->getNumIncomingValues() != 2)
     return false;
 
   for (unsigned Idx = 0; Idx != 2; ++Idx) {
-    Value *FoundStep = P->getIncomingValue(Idx);
-    Value *FoundStart = P->getIncomingValue(!Idx);
+    Value *FoundStep = Phi->getIncomingValue(Idx);
+    Value *FoundStart = Phi->getIncomingValue(!Idx);
 
     Instruction *TV, *FV;
     if (!match(FoundStep,
@@ -332,12 +395,8 @@ static bool matchConditionalRecurrence(
 
     // For a conditional recurrence, both the true and false values of the
     // select must ultimately end up in the same recurrent BinOp.
-    ExtraConst = nullptr;
-    BinaryOperator *FoundBO =
-        digRecurrence(TV, P, L, ExtraConst, BOWithConstOpToMatch);
-    BinaryOperator *AltBO =
-        digRecurrence(FV, P, L, ExtraConst, BOWithConstOpToMatch);
-
+    BinaryOperator *FoundBO = digRecurrence(TV, P, BOWithConstOpToMatch);
+    BinaryOperator *AltBO = digRecurrence(FV, P, BOWithConstOpToMatch);
     if (!FoundBO || FoundBO != AltBO)
       return false;
 
@@ -355,69 +414,27 @@ static bool matchConditionalRecurrence(
   return false;
 }
 
-/// A structure that can hold either a Simple Recurrence or a Conditional
-/// Recurrence. Note that in the case of a Simple Recurrence, Step is an operand
-/// of the BO, while in a Conditional Recurrence, it is a SelectInst.
-struct RecurrenceInfo {
-  PHINode *Phi;
-  BinaryOperator *BO;
-  Value *Start;
-  Value *Step;
-  std::optional<APInt> ExtraConst;
-
-  RecurrenceInfo(PHINode *Phi, BinaryOperator *BO, Value *Start, Value *Step,
-                 std::optional<APInt> ExtraConst = std::nullopt)
-      : Phi(Phi), BO(BO), Start(Start), Step(Step), ExtraConst(ExtraConst) {}
-
-  void print(raw_ostream &OS, unsigned Indent) const {
-    OS.indent(Indent) << "Phi: ";
-    Phi->print(OS);
-    OS << "\n";
-    OS.indent(Indent) << "BinaryOperator: ";
-    BO->print(OS);
-    OS << "\n";
-    OS.indent(Indent) << "Start: ";
-    Start->print(OS);
-    OS << "\n";
-    OS.indent(Indent) << "Step: ";
-    Step->print(OS);
-    OS << "\n";
-    if (ExtraConst) {
-      OS.indent(Indent) << "ExtraConst: ";
-      ExtraConst->print(OS, false);
-      OS << "\n";
-    }
-  }
-};
-
-/// Iterates over all the phis in \p LoopLatch, and attempts to extract a Simple
-/// Recurrence, and a Conditional Recurrence.
-static std::pair<std::optional<RecurrenceInfo>, std::optional<RecurrenceInfo>>
+/// Iterates over all the phis in \p LoopLatch, and attempts to extract a
+/// Conditional Recurrence and an optional Simple Recurrence.
+static std::optional<std::pair<RecurrenceInfo, RecurrenceInfo>>
 getRecurrences(BasicBlock *LoopLatch, const PHINode *IndVar, const Loop &L) {
-  std::optional<RecurrenceInfo> SimpleRecurrence, ConditionalRecurrence;
-  for (PHINode &P : LoopLatch->phis()) {
+  auto Phis = LoopLatch->phis();
+  unsigned NumPhis = std::distance(Phis.begin(), Phis.end());
+  if (NumPhis != 2 && NumPhis != 3)
+    return {};
+
+  RecurrenceInfo SimpleRecurrence(L);
+  RecurrenceInfo ConditionalRecurrence(L);
+  for (PHINode &P : Phis) {
     if (&P == IndVar)
       continue;
-    if (!P.getType()->isIntegerTy()) {
-      LLVM_DEBUG(dbgs() << "HashRecognize: Non-integral PHI found\n");
-      return {};
-    }
-
-    BinaryOperator *BO;
-    Value *Start, *Step;
-    const APInt *GenPoly;
-    if (!SimpleRecurrence && matchSimpleRecurrence(&P, BO, Start, Step)) {
-      SimpleRecurrence = {&P, BO, Start, Step};
-    } else if (!ConditionalRecurrence &&
-               matchConditionalRecurrence(&P, BO, Start, Step, L, GenPoly,
-                                          Instruction::BinaryOps::Xor)) {
-      ConditionalRecurrence = {&P, BO, Start, Step, *GenPoly};
-    } else {
-      LLVM_DEBUG(dbgs() << "HashRecognize: Stray PHI found: " << P << "\n");
-      return {};
-    }
+    if (!SimpleRecurrence)
+      SimpleRecurrence.matchSimpleRecurrence(&P);
+    if (!ConditionalRecurrence)
+      ConditionalRecurrence.matchConditionalRecurrence(
+          &P, Instruction::BinaryOps::Xor);
   }
-  return {SimpleRecurrence, ConditionalRecurrence};
+  return std::make_pair(SimpleRecurrence, ConditionalRecurrence);
 }
 
 PolynomialInfo::PolynomialInfo(unsigned TripCount, const Value *LHS,
@@ -541,47 +558,48 @@ HashRecognize::recognizeCRC() const {
   if (!Latch || !Exit || !IndVar)
     return "Loop not in canonical form";
 
-  auto [SimpleRecurrence, ConditionalRecurrence] =
-      getRecurrences(Latch, IndVar, L);
-
+  auto R = getRecurrences(Latch, IndVar, L);
+  if (!R)
+    return "Found stray PHI";
+  auto [SimpleRecurrence, ConditionalRecurrence] = *R;
   if (!ConditionalRecurrence)
     return "Unable to find conditional recurrence";
 
   // Make sure that all recurrences are either all SCEVMul with two or SCEVDiv
   // with two, or in other words, that they're single bit-shifts.
   std::optional<bool> ByteOrderSwapped =
-      isBigEndianBitShift(SE.getSCEV(ConditionalRecurrence->BO));
+      isBigEndianBitShift(SE.getSCEV(ConditionalRecurrence.BO));
   if (!ByteOrderSwapped)
     return "Loop with non-unit bitshifts";
   if (SimpleRecurrence) {
-    if (isBigEndianBitShift(SE.getSCEV(SimpleRecurrence->BO)) !=
+    if (isBigEndianBitShift(SE.getSCEV(SimpleRecurrence.BO)) !=
         ByteOrderSwapped)
       return "Loop with non-unit bitshifts";
-    if (!arePHIsIntertwined(SimpleRecurrence->Phi, ConditionalRecurrence->Phi,
-                            L, Instruction::BinaryOps::Xor))
+    if (!arePHIsIntertwined(SimpleRecurrence.Phi, ConditionalRecurrence.Phi, L,
+                            Instruction::BinaryOps::Xor))
       return "Simple recurrence doesn't use conditional recurrence with XOR";
   }
 
   // Make sure that the computed value is used in the exit block: this should be
   // true even if it is only really used in an outer loop's exit block, since
   // the loop is in LCSSA form.
-  auto *ComputedValue = cast<SelectInst>(ConditionalRecurrence->Step);
+  auto *ComputedValue = cast<SelectInst>(ConditionalRecurrence.Step);
   if (none_of(ComputedValue->users(), [Exit](User *U) {
         auto *UI = dyn_cast<Instruction>(U);
         return UI && UI->getParent() == Exit;
       }))
     return "Unable to find use of computed value in loop exit block";
 
-  assert(ConditionalRecurrence->ExtraConst &&
+  assert(ConditionalRecurrence.ExtraConst &&
          "Expected ExtraConst in conditional recurrence");
-  const APInt &GenPoly = *ConditionalRecurrence->ExtraConst;
+  const APInt &GenPoly = *ConditionalRecurrence.ExtraConst;
 
   // PhiEvolutions are pairs of PHINodes along with their incoming value from
   // within the loop, which we term as their step.
   SmallVector<PhiStepPair, 2> PhiEvolutions;
-  PhiEvolutions.emplace_back(ConditionalRecurrence->Phi, ComputedValue);
+  PhiEvolutions.emplace_back(ConditionalRecurrence.Phi, ComputedValue);
   if (SimpleRecurrence)
-    PhiEvolutions.emplace_back(SimpleRecurrence->Phi, SimpleRecurrence->BO);
+    PhiEvolutions.emplace_back(SimpleRecurrence.Phi, SimpleRecurrence.BO);
 
   ValueEvolution VE(TC, *ByteOrderSwapped);
   std::optional<KnownPhiMap> KnownPhis = VE.computeEvolutions(PhiEvolutions);
@@ -589,14 +607,14 @@ HashRecognize::recognizeCRC() const {
   if (VE.hasError())
     return VE.getError();
 
-  KnownBits ResultBits = KnownPhis->at(ConditionalRecurrence->Phi);
+  KnownBits ResultBits = KnownPhis->at(ConditionalRecurrence.Phi);
   auto IsZero = [](const KnownBits &K) { return K.isZero(); };
   if (!checkExtractBits(ResultBits, TC, IsZero, *ByteOrderSwapped))
     return ErrBits(ResultBits, TC, *ByteOrderSwapped);
 
-  const Value *LHSAux = SimpleRecurrence ? SimpleRecurrence->Start : nullptr;
-  return PolynomialInfo(TC, ConditionalRecurrence->Start, GenPoly,
-                        ComputedValue, *ByteOrderSwapped, LHSAux);
+  const Value *LHSAux = SimpleRecurrence ? SimpleRecurrence.Start : nullptr;
+  return PolynomialInfo(TC, ConditionalRecurrence.Start, GenPoly, ComputedValue,
+                        *ByteOrderSwapped, LHSAux);
 }
 
 void CRCTable::print(raw_ostream &OS) const {

@@ -272,20 +272,7 @@ static bool sinkScalarOperands(VPlan &Plan) {
     if (NeedsDuplicating) {
       if (ScalarVFOnly)
         continue;
-      VPSingleDefRecipe *Clone;
-      if (auto *SinkCandidateRepR =
-              dyn_cast<VPReplicateRecipe>(SinkCandidate)) {
-        // TODO: Handle converting to uniform recipes as separate transform,
-        // then cloning should be sufficient here.
-        Instruction *I = SinkCandidate->getUnderlyingInstr();
-        Clone = new VPReplicateRecipe(I, SinkCandidate->operands(), true,
-                                      nullptr /*Mask*/, *SinkCandidateRepR,
-                                      *SinkCandidateRepR);
-        // TODO: add ".cloned" suffix to name of Clone's VPValue.
-      } else {
-        Clone = SinkCandidate->clone();
-      }
-
+      VPSingleDefRecipe *Clone = vputils::getSingleScalarClone(SinkCandidate);
       Clone->insertBefore(SinkCandidate);
       SinkCandidate->replaceUsesWithIf(Clone, [SinkTo](VPUser &U, unsigned) {
         return cast<VPRecipeBase>(&U)->getParent() != SinkTo;
@@ -1506,10 +1493,8 @@ static void narrowToSingleScalarRecipes(VPlan &Plan) {
       auto *RepOrWidenR = cast<VPRecipeWithIRFlags>(&R);
       if (RepR && isa<StoreInst>(RepR->getUnderlyingInstr()) &&
           vputils::isSingleScalar(RepR->getOperand(1))) {
-        auto *Clone = new VPReplicateRecipe(
-            RepOrWidenR->getUnderlyingInstr(), RepOrWidenR->operands(),
-            true /*IsSingleScalar*/, nullptr /*Mask*/, *RepR /*Flags*/,
-            *RepR /*Metadata*/, RepR->getDebugLoc());
+        auto *Clone =
+            cast<VPReplicateRecipe>(vputils::getSingleScalarClone(RepOrWidenR));
         Clone->insertBefore(RepOrWidenR);
         unsigned ExtractOpc =
             vputils::isUniformAcrossVFsAndUFs(RepR->getOperand(1))
@@ -1558,9 +1543,7 @@ static void narrowToSingleScalarRecipes(VPlan &Plan) {
           }))
         continue;
 
-      auto *Clone = new VPReplicateRecipe(
-          RepOrWidenR->getUnderlyingInstr(), RepOrWidenR->operands(),
-          true /*IsSingleScalar*/, nullptr, *RepOrWidenR);
+      VPSingleDefRecipe *Clone = vputils::getSingleScalarClone(RepOrWidenR);
       Clone->insertBefore(RepOrWidenR);
       RepOrWidenR->replaceAllUsesWith(Clone);
       if (isDeadRecipe(*RepOrWidenR))

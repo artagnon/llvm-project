@@ -7608,10 +7608,10 @@ VPWidenMemoryRecipe *VPRecipeBuilder::tryToWidenMemory(VPInstruction *VPI,
           Ptr, &Plan.getVF(), getLoadStoreType(I),
           /*Stride*/ -1, Flags, VPI->getDebugLoc());
     } else {
-      VectorPtr = new VPVectorPointerRecipe(Ptr, getLoadStoreType(I),
-                                            GEP ? GEP->getNoWrapFlags()
-                                                : GEPNoWrapFlags::none(),
-                                            VPI->getDebugLoc());
+      VectorPtr = new VPVectorPointerRecipe(
+          Ptr, &Plan.getVF(), getLoadStoreType(I),
+          GEP ? GEP->getNoWrapFlags() : GEPNoWrapFlags::none(),
+          VPI->getDebugLoc());
     }
     Builder.insert(VectorPtr);
     Ptr = VectorPtr;

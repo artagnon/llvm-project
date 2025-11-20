@@ -1974,17 +1974,19 @@ protected:
 
 /// A recipe to compute the pointers for widened memory accesses of IndexTy.
 class VPVectorPointerRecipe : public VPRecipeWithIRFlags,
-                              public VPUnrollPartAccessor<1> {
+                              public VPUnrollPartAccessor<2> {
   Type *SourceElementTy;
 
 public:
-  VPVectorPointerRecipe(VPValue *Ptr, Type *SourceElementTy,
+  VPVectorPointerRecipe(VPValue *Ptr, VPValue *VF, Type *SourceElementTy,
                         GEPNoWrapFlags GEPFlags, DebugLoc DL)
-      : VPRecipeWithIRFlags(VPDef::VPVectorPointerSC, ArrayRef<VPValue *>(Ptr),
-                            GEPFlags, DL),
+      : VPRecipeWithIRFlags(VPDef::VPVectorPointerSC, {Ptr, VF}, GEPFlags, DL),
         SourceElementTy(SourceElementTy) {}
 
   VP_CLASSOF_IMPL(VPDef::VPVectorPointerSC)
+
+  VPValue *getVFValue() { return getOperand(1); }
+  const VPValue *getVFValue() const { return getOperand(1); }
 
   void execute(VPTransformState &State) override;
 
@@ -2005,8 +2007,9 @@ public:
   }
 
   VPVectorPointerRecipe *clone() override {
-    return new VPVectorPointerRecipe(getOperand(0), SourceElementTy,
-                                     getGEPNoWrapFlags(), getDebugLoc());
+    return new VPVectorPointerRecipe(getOperand(0), getVFValue(),
+                                     SourceElementTy, getGEPNoWrapFlags(),
+                                     getDebugLoc());
   }
 
   /// Return true if this VPVectorPointerRecipe corresponds to part 0. Note that

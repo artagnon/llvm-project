@@ -2651,7 +2651,12 @@ void VPVectorPointerRecipe::execute(VPTransformState &State) {
                                 /*IsUnitStride*/ true, CurrentPart, Builder);
   Value *Ptr = State.get(getOperand(0), VPLane(0));
 
-  Value *Increment = createStepForVF(Builder, IndexTy, State.VF, CurrentPart);
+  Value *RuntimeVF = State.get(getVFValue(), VPLane(0));
+  RuntimeVF = Builder.CreateZExtOrTrunc(RuntimeVF, IndexTy);
+  Value *Increment =
+      CurrentPart == 1 ? RuntimeVF
+                       : Builder.CreateNUWMul(
+                             RuntimeVF, ConstantInt::get(IndexTy, CurrentPart));
   Value *ResultPtr = Builder.CreateGEP(getSourceElementType(), Ptr, Increment,
                                        "", getGEPNoWrapFlags());
 

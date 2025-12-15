@@ -1987,27 +1987,27 @@ protected:
 /// A recipe to compute a pointer to the last element of each part of a widened
 /// memory access for widened memory accesses of IndexedTy. Used for
 /// VPWidenMemoryRecipes or VPInterleaveRecipes that are reversed.
-class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags,
-                                 public VPUnrollPartAccessor<2> {
-  Type *IndexedTy;
+class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags {
+  Type *SourceElementTy;
 
   /// The constant stride of the pointer computed by this recipe, expressed in
-  /// units of IndexedTy.
+  /// units of SourceElementTy.
   int64_t Stride;
 
 public:
-  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *VF, Type *IndexedTy,
+  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *Offset, Type *SourceElementTy,
                            int64_t Stride, GEPNoWrapFlags GEPFlags, DebugLoc DL)
-      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC,
-                            ArrayRef<VPValue *>({Ptr, VF}), GEPFlags, DL),
-        IndexedTy(IndexedTy), Stride(Stride) {
+      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC, {Ptr, Offset},
+                            GEPFlags, DL),
+        SourceElementTy(SourceElementTy), Stride(Stride) {
     assert(Stride < 0 && "Stride must be negative");
   }
 
   VP_CLASSOF_IMPL(VPRecipeBase::VPVectorEndPointerSC)
 
-  VPValue *getVFValue() { return getOperand(1); }
-  const VPValue *getVFValue() const { return getOperand(1); }
+  int64_t getStride() const { return Stride; }
+  Type *getSourceElementType() const { return SourceElementTy; }
+  VPValue *getOffset() const { return getOperand(1); }
 
   void execute(VPTransformState &State) override;
 
@@ -2033,9 +2033,9 @@ public:
   }
 
   VPVectorEndPointerRecipe *clone() override {
-    return new VPVectorEndPointerRecipe(getOperand(0), getVFValue(), IndexedTy,
-                                        Stride, getGEPNoWrapFlags(),
-                                        getDebugLoc());
+    return new VPVectorEndPointerRecipe(getOperand(0), getOffset(),
+                                        getSourceElementType(), getStride(),
+                                        getGEPNoWrapFlags(), getDebugLoc());
   }
 
 protected:

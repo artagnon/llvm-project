@@ -539,6 +539,15 @@ m_ZExtOrSelf(const Op0_t &Op0) {
   return m_CombineOr(m_ZExt(Op0), Op0);
 }
 
+template <typename Op0_t>
+inline match_combine_or<
+    match_combine_or<AllRecipe_match<Instruction::ZExt, Op0_t>,
+                     AllRecipe_match<Instruction::Trunc, Op0_t>>,
+    Op0_t>
+m_ZExtOrTruncOrSelf(const Op0_t &Op0) {
+  return m_CombineOr(m_CombineOr(m_ZExt(Op0), m_Trunc(Op0)), Op0);
+}
+
 template <unsigned Opcode, typename Op0_t, typename Op1_t>
 inline AllRecipe_match<Opcode, Op0_t, Op1_t> m_Binary(const Op0_t &Op0,
                                                       const Op1_t &Op1) {

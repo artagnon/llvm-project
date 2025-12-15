@@ -7709,16 +7709,16 @@ VPRecipeBase *VPRecipeBuilder::tryToWidenMemory(VPInstruction *VPI,
           CM.foldTailByMasking() || !GEP
               ? GEPNoWrapFlags::none()
               : GEP->getNoWrapFlags().withoutNoUnsignedWrap();
-      VectorPtr = new VPVectorEndPointerRecipe(
-          Ptr, &Plan.getVF(), getLoadStoreType(I),
-          /*Stride*/ -1, Flags, VPI->getDebugLoc());
+      VectorPtr = Builder.createVectorEndPointerRecipe(
+          Ptr, getLoadStoreType(I),
+          /*Stride=*/-1, Flags, &Plan.getVF(), VPI->getDebugLoc());
     } else {
       VectorPtr = new VPVectorPointerRecipe(Ptr, getLoadStoreType(I),
                                             GEP ? GEP->getNoWrapFlags()
                                                 : GEPNoWrapFlags::none(),
                                             VPI->getDebugLoc());
+      Builder.insert(VectorPtr);
     }
-    Builder.insert(VectorPtr);
     Ptr = VectorPtr;
   }
 
@@ -8310,6 +8310,30 @@ VPRecipeBuilder::tryToCreatePartialReduction(VPInstruction *Reduction,
   return new VPReductionRecipe(
       RecurKind::Add, FastMathFlags(), ReductionI, Accumulator, BinOp, Cond,
       RdxUnordered{/*VFScaleFactor=*/ScaleFactor}, ReductionI->getDebugLoc());
+}
+
+VPVectorEndPointerRecipe *
+VPBuilder::createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
+                                        int64_t Stride, GEPNoWrapFlags GEPFlags,
+                                        VPValue *VF, DebugLoc DbgLoc) {
+  // Offset for Part 0 = Stride * (VF - 1).
+  VPlan &Plan = getPlan();
+  VPTypeAnalysis TypeInfo(Plan);
+  const DataLayout &DL =
+      Plan.getScalarHeader()->getIRBasicBlock()->getDataLayout();
+  Type *IndexTy = DL.getIndexType(TypeInfo.inferScalarType(Ptr));
+  Type *VFTy = TypeInfo.inferScalarType(VF);
+  VPValue *VFCast =
+      createScalarZExtOrTrunc(VF, IndexTy, VFTy, DebugLoc::getUnknown());
+  VPValue *VFMinusOne = createOverflowingOp(
+      Instruction::Sub, {VFCast, Plan.getConstantInt(IndexTy, 1u)},
+      {true, true});
+  VPValue *StridexVFMinusOne = createOverflowingOp(
+      Instruction::Mul,
+      {VFMinusOne, Plan.getConstantInt(IndexTy, Stride, /*IsSigned=*/true)});
+  auto *VEPR = tryInsertInstruction(new VPVectorEndPointerRecipe(
+      Ptr, StridexVFMinusOne, SourceElementType, Stride, GEPFlags, DbgLoc));
+  return VEPR;
 }
 
 void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,

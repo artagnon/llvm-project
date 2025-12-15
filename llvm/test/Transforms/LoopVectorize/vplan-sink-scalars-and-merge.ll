@@ -1144,6 +1144,8 @@ define void @ptr_induction_remove_dead_recipe(ptr %start, ptr %end) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT: vector.ph:
 ; CHECK-NEXT:   vp<[[END:%.+]]> = DERIVED-IV ir<%start> + vp<[[VEC_TC]]> * ir<-1>
+; CHECK-NEXT:   EMIT vp<[[SUB:%.+]]> = sub nuw nsw vp<[[VF]]>, ir<1>
+; CHECK-NEXT:   EMIT vp<[[MUL:%.+]]> = mul vp<[[SUB]]>, ir<-1>
 ; CHECK-NEXT: Successor(s): vector loop
 ; CHECK-EMPTY:
 ; CHECK-NEXT: <x1> vector loop: {
@@ -1153,10 +1155,10 @@ define void @ptr_induction_remove_dead_recipe(ptr %start, ptr %end) {
 ; CHECK-NEXT:     vp<[[STEPS:%.+]]> = SCALAR-STEPS vp<[[DEV_IV]]>, ir<-1>
 ; CHECK-NEXT:     EMIT vp<[[PTR_IV:%.+]]> = ptradd ir<%start>, vp<[[STEPS]]>
 ; CHECK-NEXT:     CLONE ir<%ptr.iv.next> = getelementptr inbounds vp<[[PTR_IV]]>, ir<-1>
-; CHECK-NEXT:     vp<[[VEC_PTR:%.+]]> = vector-end-pointer inbounds ir<%ptr.iv.next>, vp<[[VF]]>
+; CHECK-NEXT:     vp<[[VEC_PTR:%.+]]> = vector-end-pointer inbounds ir<%ptr.iv.next>, vp<[[MUL]]>
 ; CHECK-NEXT:     WIDEN ir<%l> = load vp<[[VEC_PTR]]>
-; CHECK-NEXT:     EMIT vp<%9> = reverse ir<%l>
-; CHECK-NEXT:     WIDEN ir<%c.1> = icmp ne vp<%9>, ir<0>
+; CHECK-NEXT:     EMIT vp<[[REV:%.+]]> = reverse ir<%l>
+; CHECK-NEXT:     WIDEN ir<%c.1> = icmp ne vp<[[REV]]>, ir<0>
 ; CHECK-NEXT:   Successor(s): pred.store
 ; CHECK-EMPTY:
 ; CHECK-NEXT:   <xVFxUF> pred.store: {

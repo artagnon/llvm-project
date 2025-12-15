@@ -33,13 +33,19 @@ define void @vector_reverse_i64(ptr nocapture noundef writeonly %A, ptr nocaptur
 ; CHECK-NEXT:     CLONE ir<[[IDX:%.+]]> = add nsw vp<[[SCALAR_STEPS]]>, ir<-1>
 ; CHECK-NEXT:     CLONE ir<[[IDX_PROM:%.+]]> = zext ir<[[IDX]]>
 ; CHECK-NEXT:     CLONE ir<[[ARRAY_IDX_B:%.+]]> = getelementptr inbounds ir<[[B:%.+]]>, ir<[[IDX_PROM]]>
-; CHECK-NEXT:     vp<[[VEC_END_PTR_B:%.+]]> = vector-end-pointer ir<[[ARRAY_IDX_B]]>, vp<[[EVL]]>
+; CHECK-NEXT:     EMIT-SCALAR vp<[[EVLEXT:%.+]]> = zext vp<[[EVL]]> to i64
+; CHECK-NEXT:     EMIT vp<[[EVLSUB:%.+]]> = sub nuw nsw vp<[[EVLEXT]]>, ir<1>
+; CHECK-NEXT:     EMIT vp<[[EVLMUL:%.+]]> = mul vp<[[EVLSUB]]>, ir<-1>
+; CHECK-NEXT:     vp<[[VEC_END_PTR_B:%.+]]> = vector-end-pointer ir<[[ARRAY_IDX_B]]>, vp<[[EVLMUL]]>
 ; CHECK-NEXT:     WIDEN ir<[[LOAD_B:%.+]]> = vp.load vp<[[VEC_END_PTR_B]]>, vp<[[EVL]]>
 ; CHECK-NEXT:     WIDEN-INTRINSIC vp<[[VAL_B:%.+]]> = call llvm.experimental.vp.reverse(ir<[[LOAD_B]]>, ir<true>, vp<[[EVL]]>)
 ; CHECK-NEXT:     WIDEN ir<[[ADD_RESULT:%.+]]> = add vp<[[VAL_B]]>, ir<1>
 ; CHECK-NEXT:     CLONE ir<[[ARRAY_IDX_A:%.+]]> = getelementptr inbounds ir<[[A:%.+]]>, ir<[[IDX_PROM]]>
 ; CHECK-NEXT:     WIDEN-INTRINSIC vp<[[STORE_VAL:%.+]]> = call llvm.experimental.vp.reverse(ir<[[ADD_RESULT]]>, ir<true>, vp<[[EVL]]>)
-; CHECK-NEXT:     vp<[[VEC_END_PTR_A:%.+]]> = vector-end-pointer ir<[[ARRAY_IDX_A]]>, vp<[[EVL]]>
+; CHECK-NEXT:     EMIT-SCALAR vp<[[EVLEXT2:%.+]]> = zext vp<[[EVL]]> to i64
+; CHECK-NEXT:     EMIT vp<[[EVLSUB2:%.+]]> = sub nuw nsw vp<[[EVLEXT2]]>, ir<1>
+; CHECK-NEXT:     EMIT vp<[[EVLMUL2:%.+]]> = mul vp<[[EVLSUB2]]>, ir<-1>
+; CHECK-NEXT:     vp<[[VEC_END_PTR_A:%.+]]> = vector-end-pointer ir<[[ARRAY_IDX_A]]>, vp<[[EVLMUL2]]>
 ; CHECK-NEXT:     WIDEN vp.store vp<[[VEC_END_PTR_A]]>, vp<[[STORE_VAL]]>, vp<[[EVL]]>
 ; CHECK-NEXT:     EMIT vp<[[IV_NEXT]]> = add vp<[[EVL]]>, vp<[[EVL_PHI]]>
 ; CHECK-NEXT:     EMIT vp<[[AVL_NEXT]]> = sub nuw vp<[[AVL]]>, vp<[[EVL]]>

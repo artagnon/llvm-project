@@ -2008,8 +2008,7 @@ protected:
 /// A recipe to compute a pointer to the last element of each part of a widened
 /// memory access for widened memory accesses of SourceElementTy. Used for
 /// VPWidenMemoryRecipes or VPInterleaveRecipes that are reversed.
-class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags,
-                                 public VPUnrollPartAccessor<2> {
+class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags {
   Type *SourceElementTy;
 
   /// The constant stride of the pointer computed by this recipe, expressed in
@@ -2017,9 +2016,9 @@ class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags,
   int64_t Stride;
 
 public:
-  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *VF, Type *SourceElementTy,
+  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *Offset, Type *SourceElementTy,
                            int64_t Stride, GEPNoWrapFlags GEPFlags, DebugLoc DL)
-      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC, {Ptr, VF},
+      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC, {Ptr, Offset},
                             GEPFlags, DL),
         SourceElementTy(SourceElementTy), Stride(Stride) {
     assert(Stride < 0 && "Stride must be negative");
@@ -2028,8 +2027,8 @@ public:
   VP_CLASSOF_IMPL(VPRecipeBase::VPVectorEndPointerSC)
 
   Type *getSourceElementType() const { return SourceElementTy; }
-  VPValue *getVFValue() { return getOperand(1); }
-  const VPValue *getVFValue() const { return getOperand(1); }
+  int64_t getStride() const { return Stride; }
+  VPValue *getOffset() const { return getOperand(1); }
 
   void execute(VPTransformState &State) override;
 
@@ -2055,8 +2054,8 @@ public:
   }
 
   VPVectorEndPointerRecipe *clone() override {
-    return new VPVectorEndPointerRecipe(getOperand(0), getVFValue(),
-                                        getSourceElementType(), Stride,
+    return new VPVectorEndPointerRecipe(getOperand(0), getOffset(),
+                                        getSourceElementType(), getStride(),
                                         getGEPNoWrapFlags(), getDebugLoc());
   }
 

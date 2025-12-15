@@ -78,6 +78,11 @@ public:
     setInsertPoint(TheBB, IP);
   }
 
+  VPlan &getPlan() const {
+    assert(getInsertBlock() && "Expected insert point to be set");
+    return *getInsertBlock()->getPlan();
+  }
+
   /// Clear the insertion point: created instructions will not be inserted into
   /// a block.
   void clearInsertionPoint() {
@@ -297,7 +302,7 @@ public:
   }
 
   VPValue *createElementCount(Type *Ty, ElementCount EC) {
-    VPlan &Plan = *getInsertBlock()->getPlan();
+    VPlan &Plan = getPlan();
     VPValue *RuntimeEC = Plan.getConstantInt(Ty, EC.getKnownMinValue());
     if (EC.isScalable()) {
       VPValue *VScale = createNaryOp(VPInstruction::VScale, {}, Ty);
@@ -372,6 +377,13 @@ public:
         IV, Step, VF, InductionOpcode,
         FPBinOp ? FPBinOp->getFastMathFlags() : FastMathFlags(), DL));
   }
+
+  /// Create and insert a VectorEndPointerRecipe: requires insert-point to be
+  /// set.
+  VPVectorEndPointerRecipe *
+  createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
+                               int64_t Stride, GEPNoWrapFlags GEPFlags,
+                               VPValue *VF, DebugLoc DbgLoc);
 
   VPExpandSCEVRecipe *createExpandSCEV(const SCEV *Expr) {
     return tryInsertInstruction(new VPExpandSCEVRecipe(Expr));

@@ -2992,10 +2992,19 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
 
   /// Adjust any end pointers so that they point to the end of EVL lanes not VF.
   auto AdjustEndPtr = [&CurRecipe, &EVL](VPValue *EndPtr) {
-    auto *EVLEndPtr = cast<VPVectorEndPointerRecipe>(EndPtr)->clone();
-    EVLEndPtr->insertBefore(&CurRecipe);
-    EVLEndPtr->setOperand(1, &EVL);
-    return EVLEndPtr;
+    auto *VEPR = cast<VPVectorEndPointerRecipe>(EndPtr);
+    VPBuilder Builder(&CurRecipe);
+    return Builder.createVectorEndPointerRecipe(
+        VEPR->getOperand(0), VEPR->getSourceElementType(), VEPR->getStride(),
+        VEPR->getGEPNoWrapFlags(), &EVL, VEPR->getDebugLoc());
+  };
+
+  auto m_VecEndPtrVF = [&Plan](VPValue *&Addr, int64_t Stride) { // NOLINT
+    return m_VecEndPtr(
+        m_VPValue(Addr),
+        m_c_Mul(
+            m_SpecificSInt(Stride),
+            m_Sub(m_ZExtOrTruncOrSelf(m_Specific(&Plan->getVF())), m_One())));
   };
 
   if (match(&CurRecipe,
@@ -3008,7 +3017,10 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe, m_Reverse(m_VPValue(ReversedVal))) &&
       match(ReversedVal,
             m_MaskedLoad(m_VPValue(EndPtr), m_RemoveMask(HeaderMask, Mask))) &&
-      match(EndPtr, m_VecEndPtr(m_VPValue(Addr), m_Specific(&Plan->getVF()))) &&
+      isa<VPVectorEndPointerRecipe>(EndPtr) &&
+      match(EndPtr,
+            m_VecEndPtrVF(
+                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
       cast<VPWidenLoadRecipe>(ReversedVal)->isReverse()) {
     auto *LoadR = new VPWidenLoadEVLRecipe(
         *cast<VPWidenLoadRecipe>(ReversedVal), AdjustEndPtr(EndPtr), EVL, Mask);
@@ -3028,7 +3040,10 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe,
             m_MaskedStore(m_VPValue(EndPtr), m_Reverse(m_VPValue(ReversedVal)),
                           m_RemoveMask(HeaderMask, Mask))) &&
-      match(EndPtr, m_VecEndPtr(m_VPValue(Addr), m_Specific(&Plan->getVF()))) &&
+      isa<VPVectorEndPointerRecipe>(EndPtr) &&
+      match(EndPtr,
+            m_VecEndPtrVF(
+                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
       cast<VPWidenStoreRecipe>(CurRecipe).isReverse()) {
     auto *NewReverse = new VPWidenIntrinsicRecipe(
         Intrinsic::experimental_vp_reverse,
@@ -3120,10 +3135,10 @@ static void fixupVFUsersForEVL(VPlan &Plan, VPValue &EVL) {
   VPRegionBlock *LoopRegion = Plan.getVectorLoopRegion();
   VPBasicBlock *Header = LoopRegion->getEntryBasicBlock();
 
-  assert(all_of(Plan.getVF().users(),
-                IsaPred<VPVectorEndPointerRecipe, VPScalarIVStepsRecipe,
-                        VPWidenIntOrFpInductionRecipe>) &&
-         "User of VF that we can't transform to EVL.");
+  assert(
+      all_of(Plan.getVF().users(), IsaPred<VPInstruction, VPScalarIVStepsRecipe,
+                                           VPWidenIntOrFpInductionRecipe>) &&
+      "User of VF that we can't transform to EVL.");
   Plan.getVF().replaceUsesWithIf(&EVL, [](VPUser &U, unsigned Idx) {
     return isa<VPWidenIntOrFpInductionRecipe, VPScalarIVStepsRecipe>(U);
   });
@@ -3605,6 +3620,7 @@ void VPlanTransforms::createInterleaveGroups(
     // Get or create the start address for the interleave group.
     VPValue *Addr = Start->getAddr();
     VPRecipeBase *AddrDef = Addr->getDefiningRecipe();
+    VPBuilder B(InsertPos);
     if (AddrDef && !VPDT.properlyDominates(AddrDef, InsertPos)) {
       // We cannot re-use the address of member zero because it does not
       // dominate the insert position. Instead, use the address of the insert
@@ -3620,7 +3636,6 @@ void VPlanTransforms::createInterleaveGroups(
                        IG->getIndex(IRInsertPos),
                    /*IsSigned=*/true);
       VPValue *OffsetVPV = Plan.getConstantInt(-Offset);
-      VPBuilder B(InsertPos);
       Addr = B.createNoWrapPtrAdd(InsertPos->getAddr(), OffsetVPV, NW);
     }
     // If the group is reverse, adjust the index to refer to the last vector
@@ -3628,11 +3643,10 @@ void VPlanTransforms::createInterleaveGroups(
     // lane, rather than directly getting the pointer for lane VF - 1, because
     // the pointer operand of the interleaved access is supposed to be uniform.
     if (IG->isReverse()) {
-      auto *ReversePtr = new VPVectorEndPointerRecipe(
-          Addr, &Plan.getVF(), getLoadStoreType(IRInsertPos),
-          -(int64_t)IG->getFactor(), NW, InsertPos->getDebugLoc());
-      ReversePtr->insertBefore(InsertPos);
-      Addr = ReversePtr;
+      B.setInsertPoint(InsertPos);
+      Addr = B.createVectorEndPointerRecipe(
+          Addr, getLoadStoreType(IRInsertPos), -(int64_t)IG->getFactor(), NW,
+          &Plan.getVF(), InsertPos->getDebugLoc());
     }
     auto *VPIG = new VPInterleaveRecipe(IG, Addr, StoredValues,
                                         InsertPos->getMask(), NeedsMaskForGaps,

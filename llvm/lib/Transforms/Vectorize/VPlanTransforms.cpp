@@ -2931,11 +2931,11 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
         VEPR->getGEPNoWrapFlags(), &EVL, VEPR->getDebugLoc());
   };
 
-  auto m_VecEndPtrVF = [&Plan](VPValue *&Addr) { // NOLINT
+  auto m_VecEndPtrVF = [&Plan](VPValue *&Addr, int64_t Stride) { // NOLINT
     return m_VecEndPtr(
         m_VPValue(Addr),
         m_c_Mul(
-            m_VPValue(),
+            m_SpecificSInt(Stride),
             m_Sub(m_ZExtOrTruncOrSelf(m_Specific(&Plan->getVF())), m_One())));
   };
 
@@ -2949,7 +2949,10 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe, m_Reverse(m_VPValue(ReversedVal))) &&
       match(ReversedVal,
             m_MaskedLoad(m_VPValue(EndPtr), m_RemoveMask(HeaderMask, Mask))) &&
-      match(EndPtr, m_VecEndPtrVF(Addr)) &&
+      isa<VPVectorEndPointerRecipe>(EndPtr) &&
+      match(EndPtr,
+            m_VecEndPtrVF(
+                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
       cast<VPWidenLoadRecipe>(ReversedVal)->isReverse()) {
     auto *LoadR = new VPWidenLoadEVLRecipe(
         *cast<VPWidenLoadRecipe>(ReversedVal), AdjustEndPtr(EndPtr), EVL, Mask);
@@ -2969,7 +2972,10 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe,
             m_MaskedStore(m_VPValue(EndPtr), m_Reverse(m_VPValue(ReversedVal)),
                           m_RemoveMask(HeaderMask, Mask))) &&
-      match(EndPtr, m_VecEndPtrVF(Addr)) &&
+      isa<VPVectorEndPointerRecipe>(EndPtr) &&
+      match(EndPtr,
+            m_VecEndPtrVF(
+                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
       cast<VPWidenStoreRecipe>(CurRecipe).isReverse()) {
     auto *NewReverse = new VPWidenIntrinsicRecipe(
         Intrinsic::experimental_vp_reverse,
@@ -3557,10 +3563,9 @@ void VPlanTransforms::createInterleaveGroups(
     // the pointer operand of the interleaved access is supposed to be uniform.
     if (IG->isReverse()) {
       B.setInsertPoint(InsertPos);
-      auto *ReversePtr = B.createVectorEndPointerRecipe(
+      Addr = B.createVectorEndPointerRecipe(
           Addr, getLoadStoreType(IRInsertPos), -(int64_t)IG->getFactor(), NW,
           &Plan.getVF(), InsertPos->getDebugLoc());
-      Addr = ReversePtr;
     }
     auto *VPIG = new VPInterleaveRecipe(IG, Addr, StoredValues,
                                         InsertPos->getMask(), NeedsMaskForGaps,

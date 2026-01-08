@@ -8313,7 +8313,7 @@ VPRecipeBuilder::tryToCreatePartialReduction(VPInstruction *Reduction,
 }
 
 VPVectorEndPointerRecipe *
-VPBuilder::createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
+VPBuilder::createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementTy,
                                         int64_t Stride, GEPNoWrapFlags GEPFlags,
                                         VPValue *VF, DebugLoc DbgLoc) {
   // Offset for Part 0 = Stride * (VF - 1).
@@ -8325,14 +8325,14 @@ VPBuilder::createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
   Type *VFTy = TypeInfo.inferScalarType(VF);
   VPValue *VFCast =
       createScalarZExtOrTrunc(VF, IndexTy, VFTy, DebugLoc::getUnknown());
-  VPValue *VFMinusOne = createOverflowingOp(
+  VPInstruction *VFMinusOne = createOverflowingOp(
       Instruction::Sub, {VFCast, Plan.getConstantInt(IndexTy, 1u)},
       {true, true});
-  VPValue *StridexVFMinusOne = createOverflowingOp(
+  VPInstruction *StridexVFMinusOne = createOverflowingOp(
       Instruction::Mul,
       {VFMinusOne, Plan.getConstantInt(IndexTy, Stride, /*IsSigned=*/true)});
   auto *VEPR = tryInsertInstruction(new VPVectorEndPointerRecipe(
-      Ptr, StridexVFMinusOne, SourceElementType, Stride, GEPFlags, DbgLoc));
+      Ptr, StridexVFMinusOne, SourceElementTy, Stride, GEPFlags, DbgLoc));
   return VEPR;
 }
 

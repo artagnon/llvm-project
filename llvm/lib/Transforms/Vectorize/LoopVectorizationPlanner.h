@@ -78,7 +78,10 @@ public:
     setInsertPoint(TheBB, IP);
   }
 
-  VPlan &getPlan() const { return *getInsertBlock()->getPlan(); }
+  VPlan &getPlan() const {
+    assert(getInsertBlock() && "Expected insert point to be set");
+    return *getInsertBlock()->getPlan();
+  }
 
   /// Clear the insertion point: created instructions will not be inserted into
   /// a block.
@@ -355,9 +358,8 @@ public:
         FPBinOp ? FPBinOp->getFastMathFlags() : FastMathFlags(), DL));
   }
 
-  /// Create and insert a VectorEndPointerRecipe, with an optional \p
-  /// VFReplacement parameter, which is used in place of the VF recipe: useful
-  /// when there is an EVL recipe instead.
+  /// Create and insert a VectorEndPointerRecipe: requires insert-point to be
+  /// set.
   VPVectorEndPointerRecipe *
   createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
                                int64_t Stride, GEPNoWrapFlags GEPFlags,

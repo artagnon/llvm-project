@@ -93,10 +93,9 @@ struct deferredval_ty {
 /// whichever value m_VPValue(X) populated.
 inline deferredval_ty m_Deferred(VPValue *const &V) { return V; }
 
-/// Match an integer constant or vector of constants if Pred::isValue returns
-/// true for the APInt. \p BitWidth optionally specifies the bitwidth the
-/// matched constant must have. If it is 0, the matched constant can have any
-/// bitwidth.
+/// Match an integer constant if Pred::isValue returns true for the APInt. \p
+/// BitWidth optionally specifies the bitwidth the matched constant must have.
+/// If it is 0, the matched constant can have any bitwidth.
 template <typename Pred, unsigned BitWidth = 0> struct int_pred_ty {
   Pred P;
 
@@ -117,15 +116,18 @@ template <typename Pred, unsigned BitWidth = 0> struct int_pred_ty {
   }
 };
 
-/// Match a specified integer value or vector of all elements of that
-/// value. \p BitWidth optionally specifies the bitwidth the matched constant
-/// must have. If it is 0, the matched constant can have any bitwidth.
+/// Match a specified signed or unsigned integer value.
 struct is_specific_int {
   APInt Val;
+  bool IsSigned;
 
-  is_specific_int(APInt Val) : Val(std::move(Val)) {}
+  is_specific_int(APInt Val, bool IsSigned = false)
+      : Val(std::move(Val)), IsSigned(IsSigned) {}
 
-  bool isValue(const APInt &C) const { return APInt::isSameValue(Val, C); }
+  bool isValue(const APInt &C) const {
+    return IsSigned ? APInt::isSameSignedValue(Val, C)
+                    : APInt::isSameValue(Val, C);
+  }
 };
 
 template <unsigned Bitwidth = 0>
@@ -133,6 +135,11 @@ using specific_intval = int_pred_ty<is_specific_int, Bitwidth>;
 
 inline specific_intval<0> m_SpecificInt(uint64_t V) {
   return specific_intval<0>(is_specific_int(APInt(64, V)));
+}
+
+inline specific_intval<0> m_SpecificSInt(int64_t V) {
+  return specific_intval<0>(
+      is_specific_int(APInt(64, V, /*isSigned=*/true), /*IsSigned=*/true));
 }
 
 inline specific_intval<1> m_False() {

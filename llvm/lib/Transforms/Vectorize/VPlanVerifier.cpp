@@ -166,7 +166,8 @@ bool VPlanVerifier::verifyEVLRecipe(const VPInstruction &EVL) const {
     if (all_of(VEPRs, [&EVL](VPUser *U) {
           auto *VEPR = cast<VPVectorEndPointerRecipe>(U);
           return match(VEPR->getOffset(),
-                       m_c_Mul(m_VPValue(), m_Sub(m_Specific(&EVL), m_One())));
+                       m_c_Mul(m_SpecificSInt(VEPR->getStride()),
+                               m_Sub(m_Specific(&EVL), m_One())));
         }))
       return true;
     errs() << "Expected VectorEndPointer with EVL operand\n";
@@ -196,6 +197,10 @@ bool VPlanVerifier::verifyEVLRecipe(const VPInstruction &EVL) const {
               I->getOpcode() == Instruction::ICmp)
             return VerifyEVLUse(*I, 1);
           if (I->getOpcode() == Instruction::Sub) {
+            // If Sub has a single user that's a SingleDefRecipe (which is
+            // exepcted to be a Mul), filter its users, in turn, to get
+            // VectorEndPointerRecipes, and verify that all the offsets match
+            // (EVL - 1) * Stride.
             auto *VPI =
                 dyn_cast_if_present<VPSingleDefRecipe>(I->getSingleUser());
             if (VPI) {

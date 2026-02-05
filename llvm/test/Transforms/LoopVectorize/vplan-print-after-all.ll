@@ -33,6 +33,8 @@
 ; CHECK: VPlan after mergeBlocksIntoPredecessors
 ; CHECK: VPlan after licm
 ; CHECK: VPlan after VPlanTransforms::optimize
+; CHECK: VPlan after VPlanTransforms::materializeOffsetForVectorEndPointer
+; CHECK: VPlan after VPlanTransforms::licm
 ; CHECK: VPlan after VPlanTransforms::materializeConstantVectorTripCount
 ; CHECK: VPlan after VPlanTransforms::unrollByUF
 ; CHECK: VPlan after VPlanTransforms::materializePacksAndUnpacks

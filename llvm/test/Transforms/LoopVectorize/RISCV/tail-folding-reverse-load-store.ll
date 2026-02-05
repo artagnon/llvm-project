@@ -161,7 +161,7 @@ define void @reverse_load_store_masked(i64 %startval, ptr noalias %ptr, ptr noal
 ; NO-VP-NEXT:    [[N_VEC:%.*]] = sub i64 1024, [[N_MOD_VF]]
 ; NO-VP-NEXT:    [[TMP6:%.*]] = sub i64 [[STARTVAL1:%.*]], [[N_VEC]]
 ; NO-VP-NEXT:    [[TMP7:%.*]] = trunc i64 [[N_VEC]] to i32
-; NO-VP-NEXT:    [[TMP11:%.*]] = sub i64 [[TMP3]], 1
+; NO-VP-NEXT:    [[TMP11:%.*]] = sub nuw nsw i64 [[TMP3]], 1
 ; NO-VP-NEXT:    [[TMP14:%.*]] = mul i64 [[TMP11]], -1
 ; NO-VP-NEXT:    br label [[FOR_BODY:%.*]]
 ; NO-VP:       vector.body:

@@ -2653,6 +2653,8 @@ void VPWidenGEPRecipe::printRecipe(raw_ostream &O, const Twine &Indent,
 
 void VPVectorEndPointerRecipe::execute(VPTransformState &State) {
   auto &Builder = State.Builder;
+  assert(getOffset() &&
+         "Expected offset to be added by materializeOffsetForVectorEndPointer");
   Value *Ptr = State.get(getOperand(0), true);
   Value *Offset = State.get(getOffset(), true);
   Value *ResultPtr = Builder.CreateGEP(getSourceElementType(), Ptr, Offset, "",

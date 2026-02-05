@@ -2007,7 +2007,9 @@ protected:
 
 /// A recipe to compute a pointer to the last element of each part of a widened
 /// memory access for widened memory accesses of SourceElementTy. Used for
-/// VPWidenMemoryRecipes or VPInterleaveRecipes that are reversed.
+/// VPWidenMemoryRecipes or VPInterleaveRecipes that are reversed. An extra
+/// Offset operand is added by materializeOffsetForVectorEndPointer for Part0,
+/// and changed for PartN by the unroller.
 class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags {
   Type *SourceElementTy;
 
@@ -2016,9 +2018,9 @@ class VPVectorEndPointerRecipe : public VPRecipeWithIRFlags {
   int64_t Stride;
 
 public:
-  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *Offset, Type *SourceElementTy,
+  VPVectorEndPointerRecipe(VPValue *Ptr, VPValue *VF, Type *SourceElementTy,
                            int64_t Stride, GEPNoWrapFlags GEPFlags, DebugLoc DL)
-      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC, {Ptr, Offset},
+      : VPRecipeWithIRFlags(VPRecipeBase::VPVectorEndPointerSC, {Ptr, VF},
                             GEPFlags, DL),
         SourceElementTy(SourceElementTy), Stride(Stride) {
     assert(Stride < 0 && "Stride must be negative");
@@ -2028,7 +2030,11 @@ public:
 
   Type *getSourceElementType() const { return SourceElementTy; }
   int64_t getStride() const { return Stride; }
-  VPValue *getOffset() const { return getOperand(1); }
+  VPValue *getPointer() const { return getOperand(0); }
+  VPValue *getVFValue() const { return getOperand(1); }
+  VPValue *getOffset() const {
+    return getNumOperands() == 3 ? getOperand(2) : nullptr;
+  }
 
   void execute(VPTransformState &State) override;
 
@@ -2054,9 +2060,12 @@ public:
   }
 
   VPVectorEndPointerRecipe *clone() override {
-    return new VPVectorEndPointerRecipe(getOperand(0), getOffset(),
-                                        getSourceElementType(), getStride(),
-                                        getGEPNoWrapFlags(), getDebugLoc());
+    auto *VEPR = new VPVectorEndPointerRecipe(
+        getPointer(), getVFValue(), getSourceElementType(), getStride(),
+        getGEPNoWrapFlags(), getDebugLoc());
+    if (auto *Offset = getOffset())
+      VEPR->addOperand(Offset);
+    return VEPR;
   }
 
 protected:

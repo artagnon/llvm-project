@@ -188,7 +188,8 @@ bool VPlanVerifier::verifyEVLRecipe(const VPInstruction &EVL) const {
           }
           return VerifyEVLUse(*R, 2);
         })
-        .Case<VPWidenLoadEVLRecipe, VPInterleaveEVLRecipe>(
+        .Case<VPWidenLoadEVLRecipe, VPVectorEndPointerRecipe,
+              VPInterleaveEVLRecipe>(
             [&](const VPRecipeBase *R) { return VerifyEVLUse(*R, 1); })
         .Case(
             [&](const VPInstructionWithType *S) { return VerifyEVLUse(*S, 0); })

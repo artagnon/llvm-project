@@ -378,13 +378,6 @@ public:
         FPBinOp ? FPBinOp->getFastMathFlags() : FastMathFlags(), DL));
   }
 
-  /// Create and insert a VectorEndPointerRecipe: requires insert-point to be
-  /// set.
-  VPVectorEndPointerRecipe *
-  createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementType,
-                               int64_t Stride, GEPNoWrapFlags GEPFlags,
-                               VPValue *VF, DebugLoc DbgLoc);
-
   VPExpandSCEVRecipe *createExpandSCEV(const SCEV *Expr) {
     return tryInsertInstruction(new VPExpandSCEVRecipe(Expr));
   }

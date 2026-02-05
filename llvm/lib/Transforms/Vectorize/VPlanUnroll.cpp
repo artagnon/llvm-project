@@ -364,7 +364,8 @@ void UnrollState::unrollRecipeByUF(VPRecipeBase &R) {
       VPValue *Offset = Builder.createOverflowingOp(Instruction::Add,
                                                     {PrevOffset, VFxStride});
       Copy->setOperand(0, VEPR->getOperand(0));
-      Copy->setOperand(1, Offset);
+      Copy->setOperand(1, VEPR->getOperand(1));
+      Copy->setOperand(2, Offset);
       continue;
     }
     if (auto *Red = dyn_cast<VPReductionRecipe>(&R)) {

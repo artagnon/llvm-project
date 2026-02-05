@@ -355,6 +355,9 @@ struct VPlanTransforms {
   /// Perform common-subexpression-elimination on \p Plan.
   static void cse(VPlan &Plan);
 
+  /// Perform loop-invariant code motion on \p Plan.
+  static void licm(VPlan &Plan);
+
   /// If there's a single exit block, optimize its phi recipes that use exiting
   /// IV values by feeding them precomputed end values instead, possibly taken
   /// one step backwards.
@@ -362,6 +365,9 @@ struct VPlanTransforms {
   optimizeInductionExitUsers(VPlan &Plan,
                              DenseMap<VPValue *, VPValue *> &EndValues,
                              PredicatedScalarEvolution &PSE);
+
+  /// Add an Offset operand to VPVectorEndPointer recipes.
+  static void materializeOffsetForVectorEndPointer(VPlan &Plan);
 
   /// Add explicit broadcasts for live-ins and VPValues defined in \p Plan's entry block if they are used as vectors.
   static void materializeBroadcasts(VPlan &Plan);

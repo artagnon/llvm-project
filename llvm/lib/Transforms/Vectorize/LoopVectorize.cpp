@@ -7731,16 +7731,16 @@ VPRecipeBase *VPRecipeBuilder::tryToWidenMemory(VPInstruction *VPI,
           CM.foldTailByMasking() || !GEP
               ? GEPNoWrapFlags::none()
               : GEP->getNoWrapFlags().withoutNoUnsignedWrap();
-      VectorPtr = Builder.createVectorEndPointerRecipe(
-          Ptr, getLoadStoreType(I),
-          /*Stride=*/-1, Flags, &Plan.getVF(), VPI->getDebugLoc());
+      VectorPtr = new VPVectorEndPointerRecipe(
+          Ptr, &Plan.getVF(), getLoadStoreType(I),
+          /*Stride*/ -1, Flags, VPI->getDebugLoc());
     } else {
       VectorPtr = new VPVectorPointerRecipe(Ptr, getLoadStoreType(I),
                                             GEP ? GEP->getNoWrapFlags()
                                                 : GEPNoWrapFlags::none(),
                                             VPI->getDebugLoc());
-      Builder.insert(VectorPtr);
     }
+    Builder.insert(VectorPtr);
     Ptr = VectorPtr;
   }
 
@@ -8093,30 +8093,6 @@ VPRecipeBuilder::tryToCreateWidenNonPhiRecipe(VPSingleDefRecipe *R,
   return tryToWiden(VPI);
 }
 
-VPVectorEndPointerRecipe *
-VPBuilder::createVectorEndPointerRecipe(VPValue *Ptr, Type *SourceElementTy,
-                                        int64_t Stride, GEPNoWrapFlags GEPFlags,
-                                        VPValue *VF, DebugLoc DbgLoc) {
-  // Offset for Part 0 = Stride * (VF - 1).
-  VPlan &Plan = getPlan();
-  VPTypeAnalysis TypeInfo(Plan);
-  const DataLayout &DL =
-      Plan.getScalarHeader()->getIRBasicBlock()->getDataLayout();
-  Type *IndexTy = DL.getIndexType(TypeInfo.inferScalarType(Ptr));
-  Type *VFTy = TypeInfo.inferScalarType(VF);
-  VPValue *VFCast =
-      createScalarZExtOrTrunc(VF, IndexTy, VFTy, DebugLoc::getUnknown());
-  VPInstruction *VFMinusOne = createOverflowingOp(
-      Instruction::Sub, {VFCast, Plan.getConstantInt(IndexTy, 1u)},
-      {true, true});
-  VPInstruction *StridexVFMinusOne = createOverflowingOp(
-      Instruction::Mul,
-      {VFMinusOne, Plan.getConstantInt(IndexTy, Stride, /*IsSigned=*/true)});
-  auto *VEPR = tryInsertInstruction(new VPVectorEndPointerRecipe(
-      Ptr, StridexVFMinusOne, SourceElementTy, Stride, GEPFlags, DbgLoc));
-  return VEPR;
-}
-
 void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
                                                         ElementCount MaxVF) {
   if (ElementCount::isKnownGT(MinVF, MaxVF))
@@ -8163,6 +8139,11 @@ void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
                        CM.getMaxSafeElements());
         RUN_VPLAN_PASS(VPlanTransforms::optimizeEVLMasks, *Plan);
       }
+      // TODO: this pass cannot run before addExplicitVectorLength, and suffers
+      // from this late position as a result.
+      RUN_VPLAN_PASS(VPlanTransforms::materializeOffsetForVectorEndPointer,
+                     *Plan);
+      RUN_VPLAN_PASS(VPlanTransforms::licm, *Plan);
       assert(verifyVPlanIsValid(*Plan) && "VPlan is invalid");
       VPlans.push_back(std::move(Plan));
     }

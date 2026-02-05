@@ -2529,7 +2529,7 @@ void VPlanTransforms::cse(VPlan &Plan) {
 }
 
 /// Move loop-invariant recipes out of the vector loop region in \p Plan.
-static void licm(VPlan &Plan) {
+void VPlanTransforms::licm(VPlan &Plan) {
   VPBasicBlock *Preheader = Plan.getVectorPreheader();
 
   // Hoist any loop invariant recipes from the vector loop region to the
@@ -2992,19 +2992,10 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
 
   /// Adjust any end pointers so that they point to the end of EVL lanes not VF.
   auto AdjustEndPtr = [&CurRecipe, &EVL](VPValue *EndPtr) {
-    auto *VEPR = cast<VPVectorEndPointerRecipe>(EndPtr);
-    VPBuilder Builder(&CurRecipe);
-    return Builder.createVectorEndPointerRecipe(
-        VEPR->getOperand(0), VEPR->getSourceElementType(), VEPR->getStride(),
-        VEPR->getGEPNoWrapFlags(), &EVL, VEPR->getDebugLoc());
-  };
-
-  auto m_VecEndPtrVF = [&Plan](VPValue *&Addr, int64_t Stride) { // NOLINT
-    return m_VecEndPtr(
-        m_VPValue(Addr),
-        m_c_Mul(
-            m_SpecificSInt(Stride),
-            m_Sub(m_ZExtOrTruncOrSelf(m_Specific(&Plan->getVF())), m_One())));
+    auto *EVLEndPtr = cast<VPVectorEndPointerRecipe>(EndPtr)->clone();
+    EVLEndPtr->insertBefore(&CurRecipe);
+    EVLEndPtr->setOperand(1, &EVL);
+    return EVLEndPtr;
   };
 
   if (match(&CurRecipe,
@@ -3017,10 +3008,7 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe, m_Reverse(m_VPValue(ReversedVal))) &&
       match(ReversedVal,
             m_MaskedLoad(m_VPValue(EndPtr), m_RemoveMask(HeaderMask, Mask))) &&
-      isa<VPVectorEndPointerRecipe>(EndPtr) &&
-      match(EndPtr,
-            m_VecEndPtrVF(
-                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
+      match(EndPtr, m_VecEndPtr(m_VPValue(Addr), m_Specific(&Plan->getVF()))) &&
       cast<VPWidenLoadRecipe>(ReversedVal)->isReverse()) {
     auto *LoadR = new VPWidenLoadEVLRecipe(
         *cast<VPWidenLoadRecipe>(ReversedVal), AdjustEndPtr(EndPtr), EVL, Mask);
@@ -3040,10 +3028,7 @@ static VPRecipeBase *optimizeMaskToEVL(VPValue *HeaderMask,
   if (match(&CurRecipe,
             m_MaskedStore(m_VPValue(EndPtr), m_Reverse(m_VPValue(ReversedVal)),
                           m_RemoveMask(HeaderMask, Mask))) &&
-      isa<VPVectorEndPointerRecipe>(EndPtr) &&
-      match(EndPtr,
-            m_VecEndPtrVF(
-                Addr, cast<VPVectorEndPointerRecipe>(EndPtr)->getStride())) &&
+      match(EndPtr, m_VecEndPtr(m_VPValue(Addr), m_Specific(&Plan->getVF()))) &&
       cast<VPWidenStoreRecipe>(CurRecipe).isReverse()) {
     auto *NewReverse = new VPWidenIntrinsicRecipe(
         Intrinsic::experimental_vp_reverse,
@@ -3135,10 +3120,10 @@ static void fixupVFUsersForEVL(VPlan &Plan, VPValue &EVL) {
   VPRegionBlock *LoopRegion = Plan.getVectorLoopRegion();
   VPBasicBlock *Header = LoopRegion->getEntryBasicBlock();
 
-  assert(
-      all_of(Plan.getVF().users(), IsaPred<VPInstruction, VPScalarIVStepsRecipe,
-                                           VPWidenIntOrFpInductionRecipe>) &&
-      "User of VF that we can't transform to EVL.");
+  assert(all_of(Plan.getVF().users(),
+                IsaPred<VPVectorEndPointerRecipe, VPScalarIVStepsRecipe,
+                        VPWidenIntOrFpInductionRecipe>) &&
+         "User of VF that we can't transform to EVL.");
   Plan.getVF().replaceUsesWithIf(&EVL, [](VPUser &U, unsigned Idx) {
     return isa<VPWidenIntOrFpInductionRecipe, VPScalarIVStepsRecipe>(U);
   });
@@ -3620,7 +3605,6 @@ void VPlanTransforms::createInterleaveGroups(
     // Get or create the start address for the interleave group.
     VPValue *Addr = Start->getAddr();
     VPRecipeBase *AddrDef = Addr->getDefiningRecipe();
-    VPBuilder B(InsertPos);
     if (AddrDef && !VPDT.properlyDominates(AddrDef, InsertPos)) {
       // We cannot re-use the address of member zero because it does not
       // dominate the insert position. Instead, use the address of the insert
@@ -3636,6 +3620,7 @@ void VPlanTransforms::createInterleaveGroups(
                        IG->getIndex(IRInsertPos),
                    /*IsSigned=*/true);
       VPValue *OffsetVPV = Plan.getConstantInt(-Offset);
+      VPBuilder B(InsertPos);
       Addr = B.createNoWrapPtrAdd(InsertPos->getAddr(), OffsetVPV, NW);
     }
     // If the group is reverse, adjust the index to refer to the last vector
@@ -3643,10 +3628,11 @@ void VPlanTransforms::createInterleaveGroups(
     // lane, rather than directly getting the pointer for lane VF - 1, because
     // the pointer operand of the interleaved access is supposed to be uniform.
     if (IG->isReverse()) {
-      B.setInsertPoint(InsertPos);
-      Addr = B.createVectorEndPointerRecipe(
-          Addr, getLoadStoreType(IRInsertPos), -(int64_t)IG->getFactor(), NW,
-          &Plan.getVF(), InsertPos->getDebugLoc());
+      auto *ReversePtr = new VPVectorEndPointerRecipe(
+          Addr, &Plan.getVF(), getLoadStoreType(IRInsertPos),
+          -(int64_t)IG->getFactor(), NW, InsertPos->getDebugLoc());
+      ReversePtr->insertBefore(InsertPos);
+      Addr = ReversePtr;
     }
     auto *VPIG = new VPInterleaveRecipe(IG, Addr, StoredValues,
                                         InsertPos->getMask(), NeedsMaskForGaps,
@@ -4424,6 +4410,38 @@ void VPlanTransforms::convertToAbstractRecipes(VPlan &Plan, VPCostContext &Ctx,
     for (VPRecipeBase &R : make_early_inc_range(*VPBB)) {
       if (auto *Red = dyn_cast<VPReductionRecipe>(&R))
         tryToCreateAbstractReductionRecipe(Red, Ctx, Range);
+    }
+  }
+}
+
+void VPlanTransforms::materializeOffsetForVectorEndPointer(VPlan &Plan) {
+  for (VPBasicBlock *VPBB : VPBlockUtils::blocksOnly<VPBasicBlock>(
+           vp_depth_first_deep(Plan.getVectorLoopRegion()))) {
+    for (VPRecipeBase &R : make_early_inc_range(*VPBB)) {
+      auto *VEPR = dyn_cast<VPVectorEndPointerRecipe>(&R);
+      if (!VEPR)
+        continue;
+      assert(!VEPR->getOffset() && "Unexpected offset operand");
+      VPBuilder Builder(VEPR);
+      VPValue *VF = VEPR->getVFValue();
+      VPTypeAnalysis TypeInfo(Plan);
+      const DataLayout &DL =
+          Plan.getScalarHeader()->getIRBasicBlock()->getDataLayout();
+      Type *IndexTy =
+          DL.getIndexType(TypeInfo.inferScalarType(VEPR->getPointer()));
+      VPValue *Stride =
+          Plan.getConstantInt(IndexTy, VEPR->getStride(), /*IsSigned=*/true);
+      Type *VFTy = TypeInfo.inferScalarType(VF);
+      VPValue *VFCast = Builder.createScalarZExtOrTrunc(VF, IndexTy, VFTy,
+                                                        DebugLoc::getUnknown());
+
+      // Offset for Part0 = Stride * (VF - 1).
+      VPInstruction *VFMinusOne = Builder.createOverflowingOp(
+          Instruction::Sub, {VFCast, Plan.getConstantInt(IndexTy, 1u)},
+          {true, true});
+      VPInstruction *Offset0 =
+          Builder.createOverflowingOp(Instruction::Mul, {VFMinusOne, Stride});
+      VEPR->addOperand(Offset0);
     }
   }
 }

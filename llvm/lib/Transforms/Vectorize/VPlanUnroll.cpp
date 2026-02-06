@@ -348,26 +348,6 @@ void UnrollState::unrollRecipeByUF(VPRecipeBase &R) {
       Copy->addOperand(VFxPart);
       continue;
     }
-    if (auto *VEPR = dyn_cast<VPVectorEndPointerRecipe>(&R)) {
-      VPBuilder Builder(VEPR);
-      VPValue *PrevOffset =
-          cast<VPVectorEndPointerRecipe>(getValueForPart(VEPR, Part - 1))
-              ->getOffset();
-      Type *IndexTy = TypeInfo.inferScalarType(PrevOffset);
-      Type *VFTy = TypeInfo.inferScalarType(&Plan.getVF());
-      VPValue *VF = Builder.createScalarZExtOrTrunc(
-          &Plan.getVF(), IndexTy, VFTy, DebugLoc::getUnknown());
-      // Offset = PrevOffset + Stride * VF.
-      VPValue *VFxStride = Builder.createOverflowingOp(
-          Instruction::Mul, {VF, Plan.getConstantInt(IndexTy, VEPR->getStride(),
-                                                     /*IsSigned=*/true)});
-      VPValue *Offset = Builder.createOverflowingOp(Instruction::Add,
-                                                    {PrevOffset, VFxStride});
-      Copy->setOperand(0, VEPR->getOperand(0));
-      Copy->setOperand(1, VEPR->getOperand(1));
-      Copy->setOperand(2, Offset);
-      continue;
-    }
     if (auto *Red = dyn_cast<VPReductionRecipe>(&R)) {
       auto *Phi = dyn_cast<VPReductionPHIRecipe>(R.getOperand(0));
       if (Phi && Phi->isOrdered()) {
@@ -384,6 +364,8 @@ void UnrollState::unrollRecipeByUF(VPRecipeBase &R) {
 
     if (auto *ScalarIVSteps = dyn_cast<VPScalarIVStepsRecipe>(Copy))
       addStartIndexForScalarSteps(ScalarIVSteps, Part);
+    if (auto *VEPR = dyn_cast<VPVectorEndPointerRecipe>(Copy))
+      materializeOffsetForVectorEndPointer(VEPR, Part);
 
     // Add operand indicating the part to generate code for, to recipes still
     // requiring it.

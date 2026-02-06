@@ -366,9 +366,6 @@ struct VPlanTransforms {
                              DenseMap<VPValue *, VPValue *> &EndValues,
                              PredicatedScalarEvolution &PSE);
 
-  /// Add an Offset operand to VPVectorEndPointer recipes.
-  static void materializeOffsetForVectorEndPointer(VPlan &Plan);
-
   /// Add explicit broadcasts for live-ins and VPValues defined in \p Plan's entry block if they are used as vectors.
   static void materializeBroadcasts(VPlan &Plan);
 

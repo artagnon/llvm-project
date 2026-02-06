@@ -3941,6 +3941,9 @@ void VPlanTransforms::convertToConcreteRecipes(VPlan &Plan) {
         ToRemove.push_back(Blend);
       }
 
+      if (auto *VEPR = dyn_cast<VPVectorEndPointerRecipe>(&R))
+        materializeOffsetForVectorEndPointer(VEPR);
+
       if (auto *Expr = dyn_cast<VPExpressionRecipe>(&R)) {
         Expr->decompose();
         ToRemove.push_back(Expr);
@@ -4410,38 +4413,6 @@ void VPlanTransforms::convertToAbstractRecipes(VPlan &Plan, VPCostContext &Ctx,
     for (VPRecipeBase &R : make_early_inc_range(*VPBB)) {
       if (auto *Red = dyn_cast<VPReductionRecipe>(&R))
         tryToCreateAbstractReductionRecipe(Red, Ctx, Range);
-    }
-  }
-}
-
-void VPlanTransforms::materializeOffsetForVectorEndPointer(VPlan &Plan) {
-  for (VPBasicBlock *VPBB : VPBlockUtils::blocksOnly<VPBasicBlock>(
-           vp_depth_first_deep(Plan.getVectorLoopRegion()))) {
-    for (VPRecipeBase &R : make_early_inc_range(*VPBB)) {
-      auto *VEPR = dyn_cast<VPVectorEndPointerRecipe>(&R);
-      if (!VEPR)
-        continue;
-      assert(!VEPR->getOffset() && "Unexpected offset operand");
-      VPBuilder Builder(VEPR);
-      VPValue *VF = VEPR->getVFValue();
-      VPTypeAnalysis TypeInfo(Plan);
-      const DataLayout &DL =
-          Plan.getScalarHeader()->getIRBasicBlock()->getDataLayout();
-      Type *IndexTy =
-          DL.getIndexType(TypeInfo.inferScalarType(VEPR->getPointer()));
-      VPValue *Stride =
-          Plan.getConstantInt(IndexTy, VEPR->getStride(), /*IsSigned=*/true);
-      Type *VFTy = TypeInfo.inferScalarType(VF);
-      VPValue *VFCast = Builder.createScalarZExtOrTrunc(VF, IndexTy, VFTy,
-                                                        DebugLoc::getUnknown());
-
-      // Offset for Part0 = Stride * (VF - 1).
-      VPInstruction *VFMinusOne = Builder.createOverflowingOp(
-          Instruction::Sub, {VFCast, Plan.getConstantInt(IndexTy, 1u)},
-          {true, true});
-      VPInstruction *Offset0 =
-          Builder.createOverflowingOp(Instruction::Mul, {VFMinusOne, Stride});
-      VEPR->addOperand(Offset0);
     }
   }
 }

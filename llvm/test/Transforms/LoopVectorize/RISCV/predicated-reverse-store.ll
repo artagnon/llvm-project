@@ -19,7 +19,7 @@ define void @reverse_predicated_store(i1 %c, ptr %dst, i64 %n) #0 {
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr float, ptr [[DST:%.*]], i64 [[IV_NEXT]]
 ; CHECK-NEXT:    [[TMP12:%.*]] = call <vscale x 4 x float> @llvm.experimental.vp.reverse.nxv4f32(<vscale x 4 x float> zeroinitializer, <vscale x 4 x i1> splat (i1 true), i32 [[TMP1]])
 ; CHECK-NEXT:    [[TMP4:%.*]] = zext i32 [[TMP1]] to i64
-; CHECK-NEXT:    [[TMP6:%.*]] = sub nuw nsw i64 [[TMP4]], 1
+; CHECK-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP4]], 1
 ; CHECK-NEXT:    [[TMP7:%.*]] = mul i64 [[TMP6]], -1
 ; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr float, ptr [[ARRAYIDX]], i64 [[TMP7]]
 ; CHECK-NEXT:    [[VP_REVERSE_MASK:%.*]] = call <vscale x 4 x i1> @llvm.experimental.vp.reverse.nxv4i1(<vscale x 4 x i1> [[BROADCAST_SPLAT]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP1]])

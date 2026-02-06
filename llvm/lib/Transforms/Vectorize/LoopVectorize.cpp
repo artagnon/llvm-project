@@ -793,6 +793,42 @@ Value *getRuntimeVF(IRBuilderBase &B, Type *Ty, ElementCount VF) {
   return B.CreateElementCount(Ty, VF);
 }
 
+void materializeOffsetForVectorEndPointer(VPVectorEndPointerRecipe *R,
+                                          unsigned Part) {
+  if (R->getOffset())
+    return;
+
+  VPBuilder Builder(R);
+  VPlan &Plan = Builder.getPlan();
+  VPValue *VFVal = R->getVFValue();
+  VPTypeAnalysis TypeInfo(Plan);
+  const DataLayout &DL =
+      Plan.getScalarHeader()->getIRBasicBlock()->getDataLayout();
+  Type *IndexTy = DL.getIndexType(TypeInfo.inferScalarType(R->getPointer()));
+  VPValue *Stride =
+      Plan.getConstantInt(IndexTy, R->getStride(), /*IsSigned=*/true);
+  VPValue *PartxStride =
+      Plan.getConstantInt(IndexTy, Part * R->getStride(), /*IsSigned=*/true);
+  Type *VFTy = TypeInfo.inferScalarType(VFVal);
+  VPValue *VF = Builder.createScalarZExtOrTrunc(VFVal, IndexTy, VFTy,
+                                                DebugLoc::getUnknown());
+
+  // Offset for Part0 = Offset0 = Stride * (VF - 1).
+  VPInstruction *VFMinusOne =
+      Builder.createSub(VF, Plan.getConstantInt(IndexTy, 1u));
+  VPInstruction *Offset0 =
+      Builder.createOverflowingOp(Instruction::Mul, {VFMinusOne, Stride});
+  VPInstruction *Offset = Offset0;
+
+  // Offset for PartN = Offset0 + Part * Stride * VF.
+  if (Part)
+    Offset = Builder.createAdd(
+        Offset0,
+        Builder.createOverflowingOp(Instruction::Mul, {PartxStride, VF}));
+
+  R->addOperand(Offset);
+}
+
 void reportVectorizationFailure(const StringRef DebugMsg,
                                 const StringRef OREMsg, const StringRef ORETag,
                                 OptimizationRemarkEmitter *ORE, Loop *TheLoop,
@@ -8139,11 +8175,6 @@ void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
                        CM.getMaxSafeElements());
         RUN_VPLAN_PASS(VPlanTransforms::optimizeEVLMasks, *Plan);
       }
-      // TODO: this pass cannot run before addExplicitVectorLength, and suffers
-      // from this late position as a result.
-      RUN_VPLAN_PASS(VPlanTransforms::materializeOffsetForVectorEndPointer,
-                     *Plan);
-      RUN_VPLAN_PASS(VPlanTransforms::licm, *Plan);
       assert(verifyVPlanIsValid(*Plan) && "VPlan is invalid");
       VPlans.push_back(std::move(Plan));
     }

@@ -149,8 +149,6 @@ define i32 @reverse_store_with_partial_reduction(ptr noalias %dst, ptr noalias %
 ; CHECK-NEXT:    [[TMP5:%.*]] = shl nuw i64 [[TMP4]], 2
 ; CHECK-NEXT:    [[N_MOD_VF:%.*]] = urem i64 [[TMP0]], [[TMP5]]
 ; CHECK-NEXT:    [[N_VEC:%.*]] = sub i64 [[TMP0]], [[N_MOD_VF]]
-; CHECK-NEXT:    [[TMP10:%.*]] = sub nuw nsw i64 [[TMP4]], 1
-; CHECK-NEXT:    [[TMP20:%.*]] = mul i64 [[TMP10]], -1
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
 ; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[VECTOR_BODY]] ]
@@ -159,6 +157,17 @@ define i32 @reverse_store_with_partial_reduction(ptr noalias %dst, ptr noalias %
 ; CHECK-NEXT:    [[VEC_PHI3:%.*]] = phi <vscale x 4 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[PARTIAL_REDUCE6:%.*]], %[[VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[VEC_PHI4:%.*]] = phi <vscale x 4 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[PARTIAL_REDUCE7:%.*]], %[[VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[TMP6:%.*]] = sub i64 [[N]], [[INDEX]]
+; CHECK-NEXT:    [[TMP18:%.*]] = add i64 [[TMP4]], 0
+; CHECK-NEXT:    [[TMP25:%.*]] = mul i64 [[TMP18]], -1
+; CHECK-NEXT:    [[TMP26:%.*]] = add i64 [[TMP6]], [[TMP25]]
+; CHECK-NEXT:    [[TMP10:%.*]] = shl i64 [[TMP4]], 1
+; CHECK-NEXT:    [[TMP11:%.*]] = add i64 [[TMP10]], 0
+; CHECK-NEXT:    [[TMP12:%.*]] = mul i64 [[TMP11]], -1
+; CHECK-NEXT:    [[TMP13:%.*]] = add i64 [[TMP6]], [[TMP12]]
+; CHECK-NEXT:    [[TMP14:%.*]] = mul i64 [[TMP4]], 3
+; CHECK-NEXT:    [[TMP15:%.*]] = add i64 [[TMP14]], 0
+; CHECK-NEXT:    [[TMP16:%.*]] = mul i64 [[TMP15]], -1
+; CHECK-NEXT:    [[TMP17:%.*]] = add i64 [[TMP6]], [[TMP16]]
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[SRC]], align 2
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <vscale x 8 x i16> poison, i16 [[TMP7]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <vscale x 8 x i16> [[BROADCAST_SPLATINSERT]], <vscale x 8 x i16> poison, <vscale x 8 x i32> zeroinitializer
@@ -168,14 +177,21 @@ define i32 @reverse_store_with_partial_reduction(ptr noalias %dst, ptr noalias %
 ; CHECK-NEXT:    [[PARTIAL_REDUCE6]] = call <vscale x 4 x i32> @llvm.vector.partial.reduce.add.nxv4i32.nxv8i32(<vscale x 4 x i32> [[VEC_PHI3]], <vscale x 8 x i32> [[TMP8]])
 ; CHECK-NEXT:    [[PARTIAL_REDUCE7]] = call <vscale x 4 x i32> @llvm.vector.partial.reduce.add.nxv4i32.nxv8i32(<vscale x 4 x i32> [[VEC_PHI4]], <vscale x 8 x i32> [[TMP8]])
 ; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr i16, ptr [[DST]], i64 [[TMP6]]
-; CHECK-NEXT:    [[TMP12:%.*]] = mul i64 [[TMP4]], -1
-; CHECK-NEXT:    [[TMP13:%.*]] = add i64 [[TMP20]], [[TMP12]]
-; CHECK-NEXT:    [[TMP25:%.*]] = add i64 [[TMP13]], [[TMP12]]
-; CHECK-NEXT:    [[TMP15:%.*]] = add i64 [[TMP25]], [[TMP12]]
+; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr i16, ptr [[DST]], i64 [[TMP26]]
+; CHECK-NEXT:    [[TMP22:%.*]] = getelementptr i16, ptr [[DST]], i64 [[TMP13]]
+; CHECK-NEXT:    [[TMP37:%.*]] = getelementptr i16, ptr [[DST]], i64 [[TMP17]]
+; CHECK-NEXT:    [[TMP24:%.*]] = sub i64 [[TMP4]], 1
+; CHECK-NEXT:    [[TMP20:%.*]] = mul i64 [[TMP24]], -1
 ; CHECK-NEXT:    [[TMP23:%.*]] = getelementptr i16, ptr [[TMP9]], i64 [[TMP20]]
-; CHECK-NEXT:    [[TMP19:%.*]] = getelementptr i16, ptr [[TMP9]], i64 [[TMP13]]
-; CHECK-NEXT:    [[TMP28:%.*]] = getelementptr i16, ptr [[TMP9]], i64 [[TMP25]]
-; CHECK-NEXT:    [[TMP29:%.*]] = getelementptr i16, ptr [[TMP9]], i64 [[TMP15]]
+; CHECK-NEXT:    [[TMP27:%.*]] = mul i64 -1, [[TMP4]]
+; CHECK-NEXT:    [[TMP41:%.*]] = add i64 [[TMP20]], [[TMP27]]
+; CHECK-NEXT:    [[TMP19:%.*]] = getelementptr i16, ptr [[TMP21]], i64 [[TMP41]]
+; CHECK-NEXT:    [[TMP42:%.*]] = mul i64 -2, [[TMP4]]
+; CHECK-NEXT:    [[TMP43:%.*]] = add i64 [[TMP20]], [[TMP42]]
+; CHECK-NEXT:    [[TMP28:%.*]] = getelementptr i16, ptr [[TMP22]], i64 [[TMP43]]
+; CHECK-NEXT:    [[TMP44:%.*]] = mul i64 -3, [[TMP4]]
+; CHECK-NEXT:    [[TMP45:%.*]] = add i64 [[TMP20]], [[TMP44]]
+; CHECK-NEXT:    [[TMP29:%.*]] = getelementptr i16, ptr [[TMP37]], i64 [[TMP45]]
 ; CHECK-NEXT:    [[REVERSE:%.*]] = call <vscale x 8 x i16> @llvm.vector.reverse.nxv8i16(<vscale x 8 x i16> [[BROADCAST_SPLAT]])
 ; CHECK-NEXT:    store <vscale x 8 x i16> [[REVERSE]], ptr [[TMP23]], align 2
 ; CHECK-NEXT:    store <vscale x 8 x i16> [[REVERSE]], ptr [[TMP19]], align 2

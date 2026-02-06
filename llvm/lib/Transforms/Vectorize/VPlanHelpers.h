@@ -59,6 +59,9 @@ Value *emitTransformedIndex(IRBuilderBase &B, Value *Index, Value *StartValue,
                             InductionDescriptor::InductionKind InductionKind,
                             const BinaryOperator *InductionBinOp);
 
+void materializeOffsetForVectorEndPointer(VPVectorEndPointerRecipe *R,
+                                          unsigned Part = 0);
+
 /// A range of powers-of-2 vectorization factors with fixed start and
 /// adjustable end. The range includes start and excludes end, e.g.,:
 /// [1, 16) = {1, 2, 4, 8}

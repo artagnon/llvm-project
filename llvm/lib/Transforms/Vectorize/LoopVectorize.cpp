@@ -1030,11 +1030,11 @@ public:
   /// every iteration of the loop header.
   inline uint64_t
   getPredBlockCostDivisor(TargetTransformInfo::TargetCostKind CostKind,
-                          const BasicBlock *BB);
+                          const BasicBlock *BB) const;
 
   /// Returns true if an artificially high cost for emulated masked memrefs
   /// should be used.
-  bool useEmulatedMaskMemRefHack(Instruction *I, ElementCount VF);
+  bool useEmulatedMaskMemRefHack(Instruction *I, ElementCount VF) const;
 
   /// Return the costs for our two available strategies for lowering a
   /// div/rem operation which requires speculating at least one lane.
@@ -1339,13 +1339,14 @@ private:
   InstructionCost getMemoryInstructionCost(Instruction *I, ElementCount VF);
 
   /// The cost computation for scalarized memory instruction.
-  InstructionCost getMemInstScalarizationCost(Instruction *I, ElementCount VF);
+  InstructionCost getMemInstScalarizationCost(Instruction *I,
+                                              ElementCount VF) const;
 
   /// The cost computation for interleaving group of memory instructions.
-  InstructionCost getInterleaveGroupCost(Instruction *I, ElementCount VF);
+  InstructionCost getInterleaveGroupCost(Instruction *I, ElementCount VF) const;
 
   /// The cost computation for Gather/Scatter instruction.
-  InstructionCost getGatherScatterCost(Instruction *I, ElementCount VF);
+  InstructionCost getGatherScatterCost(Instruction *I, ElementCount VF) const;
 
   /// The cost computation for widening instruction \p I with consecutive
   /// memory access.
@@ -1356,7 +1357,7 @@ private:
   /// Load: scalar load + broadcast.
   /// Store: scalar store + (loop invariant value stored? 0 : extract of last
   /// element)
-  InstructionCost getUniformMemOpCost(Instruction *I, ElementCount VF);
+  InstructionCost getUniformMemOpCost(Instruction *I, ElementCount VF) const;
 
   /// Estimate the overhead of scalarizing an instruction. This is a
   /// convenience wrapper for the type-based getScalarizationOverhead API.
@@ -1504,15 +1505,6 @@ public:
   /// unless necessary, e.g. when the loop isn't legal to vectorize or when
   /// there is no predication.
   std::function<BlockFrequencyInfo &()> GetBFI;
-  /// The BlockFrequencyInfo returned from GetBFI.
-  BlockFrequencyInfo *BFI = nullptr;
-  /// Returns the BlockFrequencyInfo for the function if cached, otherwise
-  /// fetches it via GetBFI. Avoids an indirect call to the std::function.
-  BlockFrequencyInfo &getBFI() {
-    if (!BFI)
-      BFI = &GetBFI();
-    return *BFI;
-  }
 
   const Function *TheFunction;
 
@@ -2488,7 +2480,7 @@ bool LoopVectorizationCostModel::isPredicatedInst(Instruction *I) const {
 }
 
 uint64_t LoopVectorizationCostModel::getPredBlockCostDivisor(
-    TargetTransformInfo::TargetCostKind CostKind, const BasicBlock *BB) {
+    TargetTransformInfo::TargetCostKind CostKind, const BasicBlock *BB) const {
   if (CostKind == TTI::TCK_CodeSize)
     return 1;
   // If the block wasn't originally predicated then return early to avoid
@@ -2497,8 +2489,8 @@ uint64_t LoopVectorizationCostModel::getPredBlockCostDivisor(
     return 1;
 
   uint64_t HeaderFreq =
-      getBFI().getBlockFreq(TheLoop->getHeader()).getFrequency();
-  uint64_t BBFreq = getBFI().getBlockFreq(BB).getFrequency();
+      GetBFI().getBlockFreq(TheLoop->getHeader()).getFrequency();
+  uint64_t BBFreq = GetBFI().getBlockFreq(BB).getFrequency();
   assert(HeaderFreq >= BBFreq &&
          "Header has smaller block freq than dominated BB?");
   return std::round((double)HeaderFreq / BBFreq);
@@ -3974,8 +3966,8 @@ LoopVectorizationPlanner::selectInterleaveCount(VPlan &Plan, ElementCount VF,
   return 1;
 }
 
-bool LoopVectorizationCostModel::useEmulatedMaskMemRefHack(Instruction *I,
-                                                           ElementCount VF) {
+bool LoopVectorizationCostModel::useEmulatedMaskMemRefHack(
+    Instruction *I, ElementCount VF) const {
   // TODO: Cost model for emulated masked load/store is completely
   // broken. This hack guides the cost model to use an artificially
   // high enough value to practically disable vectorization with such
@@ -4211,7 +4203,7 @@ static const SCEV *getAddressAccessSCEV(
 
 InstructionCost
 LoopVectorizationCostModel::getMemInstScalarizationCost(Instruction *I,
-                                                        ElementCount VF) {
+                                                        ElementCount VF) const {
   assert(VF.isVector() &&
          "Scalarization cost of instruction implies vectorization.");
   if (VF.isScalable())
@@ -4301,7 +4293,7 @@ InstructionCost LoopVectorizationCostModel::getConsecutiveMemOpCost(
 
 InstructionCost
 LoopVectorizationCostModel::getUniformMemOpCost(Instruction *I,
-                                                ElementCount VF) {
+                                                ElementCount VF) const {
   assert(isUniformMemOp(*I, VF));
 
   Type *ValTy = getLoadStoreType(I);
@@ -4336,7 +4328,7 @@ LoopVectorizationCostModel::getUniformMemOpCost(Instruction *I,
 
 InstructionCost
 LoopVectorizationCostModel::getGatherScatterCost(Instruction *I,
-                                                 ElementCount VF) {
+                                                 ElementCount VF) const {
   Type *ValTy = getLoadStoreType(I);
   auto *VectorTy = cast<VectorType>(toVectorTy(ValTy, VF));
   const Align Alignment = getLoadStoreAlignment(I);
@@ -4359,7 +4351,7 @@ LoopVectorizationCostModel::getGatherScatterCost(Instruction *I,
 
 InstructionCost
 LoopVectorizationCostModel::getInterleaveGroupCost(Instruction *I,
-                                                   ElementCount VF) {
+                                                   ElementCount VF) const {
   const auto *Group = getInterleavedAccessGroup(I);
   assert(Group && "Fail to get an interleaved access group.");
 

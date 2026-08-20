@@ -221,7 +221,7 @@ static cl::opt<unsigned>
 static cl::opt<unsigned> RangeIterThreshold(
     "scev-range-iter-threshold", cl::Hidden,
     cl::desc("Threshold for switching to iteratively computing SCEV ranges"),
-    cl::init(32));
+    cl::init(16));
 
 static cl::opt<unsigned> MaxLoopGuardCollectionDepth(
     "scalar-evolution-max-loop-guard-collection-depth", cl::Hidden,

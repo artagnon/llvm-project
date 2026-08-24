@@ -256,8 +256,8 @@ deopt:                                          ; preds = %range_check_block
 ; known positive.
 
 define void @test_04(ptr %p) {
-; CHECK-LABEL: define void @test_04(
-; CHECK-SAME: ptr [[P:%.*]]) {
+; CHECK-LABEL: define void @test_04
+; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[N:%.*]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i32 @llvm.smin.i32(i32 [[N]], i32 0)
@@ -375,8 +375,8 @@ deopt:                                          ; preds = %range_check_block
 ; intersect ranges (with insertion of postloop).
 
 define void @test_05(ptr %p) {
-; CHECK-LABEL: define void @test_05(
-; CHECK-SAME: ptr [[P:%.*]]) {
+; CHECK-LABEL: define void @test_05
+; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[N:%.*]] = load i32, ptr [[P]], align 4, !range [[RNG7:![0-9]+]]
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i32 @llvm.umax.i32(i32 [[N]], i32 2)
@@ -485,3 +485,14 @@ deopt:                                          ; preds = %range_check_block
 }
 
 !0 = !{i32 0, i32 50}
+;.
+; CHECK: [[LOOP0]] = distinct !{[[LOOP0]], [[META1:![0-9]+]], [[META2:![0-9]+]], [[META3:![0-9]+]], [[META4:![0-9]+]]}
+; CHECK: [[META1]] = !{!"llvm.loop.unroll.disable"}
+; CHECK: [[META2]] = !{!"llvm.loop.vectorize.disable"}
+; CHECK: [[META3]] = !{!"llvm.loop.licm_versioning.disable"}
+; CHECK: [[META4]] = !{!"llvm.loop.distribute.disable"}
+; CHECK: [[META5]] = !{}
+; CHECK: [[LOOP6]] = distinct !{[[LOOP6]], [[META1]], [[META2]], [[META3]], [[META4]]}
+; CHECK: [[RNG7]] = !{i32 0, i32 50}
+; CHECK: [[LOOP8]] = distinct !{[[LOOP8]], [[META1]], [[META2]], [[META3]], [[META4]]}
+;.

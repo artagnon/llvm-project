@@ -621,7 +621,7 @@ define i32 @test_09(ptr %p, ptr %capacity_p, ptr %num_elements_p) {
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i32 @llvm.smin.i32(i32 [[LIMIT]], i32 0)
 ; CHECK-NEXT:    [[SMAX2:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN]], i32 -1)
 ; CHECK-NEXT:    [[TMP3:%.*]] = add nsw i32 [[SMAX2]], 1
-; CHECK-NEXT:    [[TMP4:%.*]] = mul nuw nsw i32 [[TMP2]], [[TMP3]]
+; CHECK-NEXT:    [[TMP4:%.*]] = mul i32 [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    [[SMIN3:%.*]] = call i32 @llvm.smin.i32(i32 [[NUM_ELEMENTS]], i32 [[TMP4]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN3]], i32 0)
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp slt i32 0, [[EXIT_MAINLOOP_AT]]
@@ -717,7 +717,7 @@ define i32 @test_10(ptr %p, ptr %capacity_p, ptr %num_elements_p) {
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i32 @llvm.smin.i32(i32 [[LIMIT]], i32 0)
 ; CHECK-NEXT:    [[SMAX2:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN]], i32 -1)
 ; CHECK-NEXT:    [[TMP3:%.*]] = add nsw i32 [[SMAX2]], 1
-; CHECK-NEXT:    [[TMP4:%.*]] = mul nuw nsw i32 [[TMP2]], [[TMP3]]
+; CHECK-NEXT:    [[TMP4:%.*]] = mul i32 [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    [[SMIN3:%.*]] = call i32 @llvm.smin.i32(i32 [[NUM_ELEMENTS]], i32 [[TMP4]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN3]], i32 0)
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp slt i32 0, [[EXIT_MAINLOOP_AT]]
@@ -814,7 +814,7 @@ define i32 @test_11(ptr %p, ptr %capacity_p, ptr %num_elements_p) {
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i32 @llvm.smin.i32(i32 [[TMP3]], i32 0)
 ; CHECK-NEXT:    [[SMAX2:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN]], i32 -1)
 ; CHECK-NEXT:    [[TMP4:%.*]] = add nsw i32 [[SMAX2]], 1
-; CHECK-NEXT:    [[TMP5:%.*]] = mul nuw nsw i32 [[TMP2]], [[TMP4]]
+; CHECK-NEXT:    [[TMP5:%.*]] = mul i32 [[TMP2]], [[TMP4]]
 ; CHECK-NEXT:    [[SMIN3:%.*]] = call i32 @llvm.smin.i32(i32 [[NUM_ELEMENTS]], i32 [[TMP5]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN3]], i32 0)
 ; CHECK-NEXT:    [[TMP6:%.*]] = icmp slt i32 0, [[EXIT_MAINLOOP_AT]]

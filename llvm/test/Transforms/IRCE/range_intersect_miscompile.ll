@@ -264,7 +264,7 @@ define void @test_04(ptr %p) {
 ; CHECK-NEXT:    [[TMP0:%.*]] = sub i32 [[N]], [[SMIN]]
 ; CHECK-NEXT:    [[SMAX:%.*]] = call i32 @llvm.smax.i32(i32 [[SMIN]], i32 -1)
 ; CHECK-NEXT:    [[TMP1:%.*]] = add nsw i32 [[SMAX]], 1
-; CHECK-NEXT:    [[TMP2:%.*]] = mul nuw nsw i32 [[TMP0]], [[TMP1]]
+; CHECK-NEXT:    [[TMP2:%.*]] = mul i32 [[TMP0]], [[TMP1]]
 ; CHECK-NEXT:    [[UMIN:%.*]] = call i32 @llvm.umin.i32(i32 [[TMP2]], i32 400)
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i32 @llvm.umax.i32(i32 [[UMIN]], i32 2)
 ; CHECK-NEXT:    [[TMP3:%.*]] = icmp ult i32 2, [[EXIT_MAINLOOP_AT]]

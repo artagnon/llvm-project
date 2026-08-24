@@ -30,7 +30,7 @@ define void @skip_free_iv_truncate(i16 %x, ptr %A) #0 {
 ; CHECK-NEXT:    [[TMP33:%.*]] = sub i64 [[SMAX10]], [[UMIN11]]
 ; CHECK-NEXT:    [[TMP34:%.*]] = sub i64 [[TMP33]], [[X_I64]]
 ; CHECK-NEXT:    [[TMP35:%.*]] = udiv i64 [[TMP34]], 3
-; CHECK-NEXT:    [[TMP36:%.*]] = add nuw nsw i64 [[UMIN11]], [[TMP35]]
+; CHECK-NEXT:    [[TMP36:%.*]] = add i64 [[UMIN11]], [[TMP35]]
 ; CHECK-NEXT:    [[TMP37:%.*]] = mul i64 [[TMP36]], 6
 ; CHECK-NEXT:    [[TMP38:%.*]] = add i64 [[TMP37]], [[TMP47]]
 ; CHECK-NEXT:    [[TMP39:%.*]] = add i64 [[TMP38]], 2

@@ -137,7 +137,7 @@ define i8 @test1a(i8 %limit, ptr %p) {
 ; CHECK-NEXT:    [[TMP0:%.*]] = add nsw i8 [[N]], -1
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i8 @llvm.smin.i8(i8 [[TMP0]], i8 0)
 ; CHECK-NEXT:    [[TMP1:%.*]] = add nsw i8 [[SMIN]], 1
-; CHECK-NEXT:    [[TMP2:%.*]] = mul nuw nsw i8 [[TMP0]], [[TMP1]]
+; CHECK-NEXT:    [[TMP2:%.*]] = mul i8 [[TMP0]], [[TMP1]]
 ; CHECK-NEXT:    [[SMIN2:%.*]] = call i8 @llvm.smin.i8(i8 [[LIMIT]], i8 [[TMP2]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i8 @llvm.smax.i8(i8 [[SMIN2]], i8 0)
 ; CHECK-NEXT:    [[TMP3:%.*]] = icmp slt i8 0, [[EXIT_MAINLOOP_AT]]
@@ -594,7 +594,7 @@ define i8 @test4a(i8 %limit, ptr %p) {
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i8 @llvm.smin.i8(i8 [[TMP3]], i8 0)
 ; CHECK-NEXT:    [[SMAX2:%.*]] = call i8 @llvm.smax.i8(i8 [[SMIN]], i8 -1)
 ; CHECK-NEXT:    [[TMP4:%.*]] = add nsw i8 [[SMAX2]], 1
-; CHECK-NEXT:    [[TMP5:%.*]] = mul nuw nsw i8 [[TMP2]], [[TMP4]]
+; CHECK-NEXT:    [[TMP5:%.*]] = mul i8 [[TMP2]], [[TMP4]]
 ; CHECK-NEXT:    [[SMIN3:%.*]] = call i8 @llvm.smin.i8(i8 [[LIMIT]], i8 [[TMP5]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i8 @llvm.smax.i8(i8 [[SMIN3]], i8 0)
 ; CHECK-NEXT:    [[TMP6:%.*]] = icmp slt i8 0, [[EXIT_MAINLOOP_AT]]
@@ -799,7 +799,7 @@ define i8 @test6(i8 %limit, i8 %n) {
 ; CHECK-NEXT:    [[SMIN:%.*]] = call i8 @llvm.smin.i8(i8 [[N]], i8 0)
 ; CHECK-NEXT:    [[SMAX2:%.*]] = call i8 @llvm.smax.i8(i8 [[SMIN]], i8 -1)
 ; CHECK-NEXT:    [[TMP2:%.*]] = add nsw i8 [[SMAX2]], 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul nuw nsw i8 [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP3:%.*]] = mul i8 [[TMP1]], [[TMP2]]
 ; CHECK-NEXT:    [[SMIN3:%.*]] = call i8 @llvm.smin.i8(i8 [[LIMIT]], i8 [[TMP3]])
 ; CHECK-NEXT:    [[EXIT_MAINLOOP_AT:%.*]] = call i8 @llvm.smax.i8(i8 [[SMIN3]], i8 0)
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp slt i8 0, [[EXIT_MAINLOOP_AT]]

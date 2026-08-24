@@ -2498,10 +2498,10 @@ static SCEV::NoWrapFlags StrengthenNoWrapFlags(ScalarEvolution *SE,
   SignOrUnsignWrap = ScalarEvolution::maskFlags(Flags, SignOrUnsignMask);
 
   // To avoid degenerate compile-time blowup, restrict the LHS to
-  // non-SCEVUnknowns, to forbid spinning on pointers.
+  // simple expressions.
   if (SignOrUnsignWrap != SignOrUnsignMask &&
       (Type == scAddExpr || Type == scMulExpr) && Ops.size() == 2 &&
-      !isa<SCEVUnknown>(Ops[0])) {
+      !isa<SCEVUnknown>(Ops[0]) && Ops[0]->getExpressionSize() <= 5) {
 
     auto Opcode = [&] {
       switch (Type) {

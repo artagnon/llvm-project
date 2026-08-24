@@ -17,7 +17,7 @@ define void @f(i1 %c) {
 ; CHECK-NEXT:    %iv.dec = add nsw i32 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: [-200,201) S: [-200,201) Exits: ((100 * %step)<nsw> + %start)<nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.sext = sext i32 %iv to i64
-; CHECK-NEXT:    --> {(zext i32 %start to i64),+,(sext i32 %step to i64)}<nsw><%loop> U: [0,101) S: [0,101) Exits: ((zext i32 %start to i64) + (99 * (sext i32 %step to i64))<nsw>)<nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(zext i32 %start to i64),+,(sext i32 %step to i64)}<nsw><%loop> U: [0,101) S: [0,101) Exits: ((zext i32 %start to i64) + (99 * (sext i32 %step to i64))<nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:  Determining loop execution counts for: @f
 ; CHECK-NEXT:  Loop %loop: backedge-taken count is i32 99
 ; CHECK-NEXT:  Loop %loop: constant max backedge-taken count is i32 99

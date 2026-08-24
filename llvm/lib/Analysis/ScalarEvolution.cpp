@@ -2501,7 +2501,8 @@ static SCEV::NoWrapFlags StrengthenNoWrapFlags(ScalarEvolution *SE,
   // simple expressions.
   if (SignOrUnsignWrap != SignOrUnsignMask &&
       (Type == scAddExpr || Type == scMulExpr) && Ops.size() == 2 &&
-      !isa<SCEVUnknown>(Ops[0]) && Ops[0]->getExpressionSize() <= 3) {
+      !isa<SCEVUnknown, SCEVIntegralCastExpr>(Ops[0]) &&
+      Ops[0]->getExpressionSize() <= 3) {
 
     auto Opcode = [&] {
       switch (Type) {

@@ -682,9 +682,9 @@ define void @test_08() {
 ; CHECK-NEXT:    %tmp11 = add i64 %iv.2.2, %iv.2.1
 ; CHECK-NEXT:    --> ({0,+,-1}<nuw><nsw><%loop_2> + %iv.2.1)<nuw><nsw> U: full-set S: full-set Exits: 0 LoopDispositions: { %loop_2: Variant }
 ; CHECK-NEXT:    %tmp12 = trunc i64 %tmp11 to i32
-; CHECK-NEXT:    --> ((trunc i64 %iv.2.1 to i32) + {0,+,-1}<nuw><nsw><%loop_2>)<nuw><nsw> U: full-set S: full-set Exits: 0 LoopDispositions: { %loop_2: Variant }
+; CHECK-NEXT:    --> ((trunc i64 %iv.2.1 to i32) + {0,+,-1}<%loop_2>) U: full-set S: full-set Exits: 0 LoopDispositions: { %loop_2: Variant }
 ; CHECK-NEXT:    %tmp14 = mul i32 %tmp12, %tmp7
-; CHECK-NEXT:    --> (((trunc i64 %iv.2.1 to i32) + {0,+,-1}<nuw><nsw><%loop_2>)<nuw><nsw> * {-1,+,-1}<nsw><%loop_1>) U: full-set S: full-set --> (-2 * ((trunc i64 %iv.2.1 to i32) + {0,+,-1}<nuw><nsw><%loop_2>)<nuw><nsw>) U: [0,-1) S: [-2147483648,2147483647) Exits: 0 LoopDispositions: { %loop_2: Variant }
+; CHECK-NEXT:    --> (((trunc i64 %iv.2.1 to i32) + {0,+,-1}<nuw><nsw><%loop_2>) * {-1,+,-1}<nsw><%loop_1>) U: full-set S: full-set --> (-2 * ((trunc i64 %iv.2.1 to i32) + {0,+,-1}<nuw><nsw><%loop_2>)) U: [0,-1) S: [-2147483648,2147483647) Exits: 0 LoopDispositions: { %loop_2: Variant }
 ; CHECK-NEXT:    %tmp16 = mul i64 %iv.2.1, %iv.1.1
 ; CHECK-NEXT:    --> ({2,+,1}<nuw><nsw><%loop_1> * %iv.2.1) U: full-set S: full-set --> (3 * %iv.2.1) U: full-set S: full-set Exits: 0 LoopDispositions: { %loop_2: Variant }
 ; CHECK-NEXT:    %iv.2.3.next = add nuw nsw i64 %iv.2.3, 1

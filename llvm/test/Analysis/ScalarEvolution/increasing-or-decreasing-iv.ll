@@ -136,7 +136,7 @@ define void @f2(i1 %c) {
 ; CHECK-NEXT:    %iv = phi i32 [ %start, %entry ], [ %iv.next, %loop ]
 ; CHECK-NEXT:    --> {%start,+,%step}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((127 * %step)<nsw> + %start)<nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.sext = sext i32 %iv to i64
-; CHECK-NEXT:    --> {(zext i32 %start to i64),+,(sext i32 %step to i64)}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((zext i32 %start to i64) + (127 * (sext i32 %step to i64))<nsw>)<nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(zext i32 %start to i64),+,(sext i32 %step to i64)}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((zext i32 %start to i64) + (127 * (sext i32 %step to i64))<nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.next = add i32 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: [-256,256) S: [-256,256) Exits: ((128 * %step)<nsw> + %start)<nuw><nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %loop.iv.inc = add i32 %loop.iv, 1
@@ -177,7 +177,7 @@ define void @f3(i1 %c) {
 ; CHECK-NEXT:    %iv = phi i16 [ %start, %entry ], [ %iv.next, %loop ]
 ; CHECK-NEXT:    --> {%start,+,%step}<%loop> U: [0,-892) S: [0,-892) Exits: ((127 * %step)<nuw> + %start) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.zext = zext i16 %iv to i64
-; CHECK-NEXT:    --> {(zext i16 %start to i64),+,(zext i16 %step to i64)}<nuw><%loop> U: [0,64644) S: [0,64644) Exits: ((zext i16 %start to i64) + (127 * (zext i16 %step to i64))<nuw><nsw>)<nuw><nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(zext i16 %start to i64),+,(zext i16 %step to i64)}<nuw><%loop> U: [0,64644) S: [0,64644) Exits: ((zext i16 %start to i64) + (127 * (zext i16 %step to i64))<nuw><nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.next = add i16 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: full-set S: full-set Exits: ((128 * %step)<nuw> + %start) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %loop.iv.inc = add i16 %loop.iv, 1
@@ -225,7 +225,7 @@ define void @f4(i1 %c) {
 ; CHECK-NEXT:    %iv = phi i32 [ %start, %entry ], [ %iv.next, %loop ]
 ; CHECK-NEXT:    --> {%start,+,%step}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((127 * %step)<nsw> + %start)<nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.trunc = trunc i32 %iv to i16
-; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>)<nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.next = add i32 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: [-256,256) S: [-256,256) Exits: ((128 * %step)<nsw> + %start)<nuw><nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %loop.iv.inc = add i32 %loop.iv, 1
@@ -267,7 +267,7 @@ define void @f5(i1 %c) {
 ; CHECK-NEXT:    %iv = phi i32 [ %start, %entry ], [ %iv.next, %loop ]
 ; CHECK-NEXT:    --> {%start,+,%step}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((127 * %step)<nsw> + %start)<nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.trunc = trunc i32 %iv to i16
-; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>)<nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.next = add i32 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: [-256,256) S: [-256,256) Exits: ((128 * %step)<nsw> + %start)<nuw><nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %loop.iv.inc = add i16 %loop.iv, 1
@@ -354,7 +354,7 @@ define void @f7(i1 %c) {
 ; CHECK-NEXT:    %iv = phi i32 [ %start, %entry ], [ %iv.next, %loop ]
 ; CHECK-NEXT:    --> {%start,+,%step}<nsw><%loop> U: [0,128) S: [0,128) Exits: ((127 * %step)<nsw> + %start)<nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.trunc = trunc i32 %iv to i16
-; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>)<nsw> LoopDispositions: { %loop: Computable }
+; CHECK-NEXT:    --> {(trunc i32 %start to i16),+,(trunc i32 %step to i16)}<%loop> U: [0,128) S: [0,128) Exits: ((trunc i32 %start to i16) + (127 * (trunc i32 %step to i16))<nsw>) LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.next = add i32 %iv, %step
 ; CHECK-NEXT:    --> {(%step + %start),+,%step}<nw><%loop> U: [-256,256) S: [-256,256) Exits: ((128 * %step)<nsw> + %start)<nuw><nsw> LoopDispositions: { %loop: Computable }
 ; CHECK-NEXT:    %iv.trunc.plus.one = add i16 %iv.trunc, 1

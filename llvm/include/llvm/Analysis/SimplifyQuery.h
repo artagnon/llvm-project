@@ -74,6 +74,7 @@ struct SimplifyQuery {
   const DominatorTree *DT = nullptr;
   AssumptionCache *AC = nullptr;
   const Instruction *CxtI = nullptr;
+  const Function *CxtF = nullptr;
   const DomConditionCache *DC = nullptr;
   const CondContext *CC = nullptr;
 

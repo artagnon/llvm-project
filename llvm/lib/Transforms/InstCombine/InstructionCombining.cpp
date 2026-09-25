@@ -48,6 +48,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/Analysis/KnownBitsDataflow.h"
 #include "llvm/Analysis/LastRunTrackingAnalysis.h"
 #include "llvm/Analysis/LazyBlockFrequencyInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
@@ -6179,10 +6180,10 @@ void InstCombiner::computeBackEdges() {
 
 static bool combineInstructionsOverFunction(
     Function &F, InstructionWorklist &Worklist, AliasAnalysis *AA,
-    AssumptionCache &AC, TargetLibraryInfo &TLI, TargetTransformInfo &TTI,
-    DominatorTree &DT, OptimizationRemarkEmitter &ORE, BlockFrequencyInfo *BFI,
-    BranchProbabilityInfo *BPI, ProfileSummaryInfo *PSI,
-    const InstCombineOptions &Opts) {
+    AssumptionCache &AC, KnownBitsDataflow &KBD, TargetLibraryInfo &TLI,
+    TargetTransformInfo &TTI, DominatorTree &DT, OptimizationRemarkEmitter &ORE,
+    BlockFrequencyInfo *BFI, BranchProbabilityInfo *BPI,
+    ProfileSummaryInfo *PSI, const InstCombineOptions &Opts) {
   auto &DL = F.getDataLayout();
   bool VerifyFixpoint = Opts.VerifyFixpoint &&
                         !F.hasFnAttribute("instcombine-no-verify-fixpoint");
@@ -6210,8 +6211,8 @@ static bool combineInstructionsOverFunction(
     LLVM_DEBUG(dbgs() << "\n\nINSTCOMBINE ITERATION #" << Iteration << " on "
                       << F.getName() << "\n");
 
-    InstCombinerImpl IC(Worklist, F, AA, AC, TLI, TTI, DT, ORE, BFI, BPI, PSI,
-                        DL, RPOT);
+    InstCombinerImpl IC(Worklist, F, AA, AC, KBD, TLI, TTI, DT, ORE, BFI, BPI,
+                        PSI, DL, RPOT);
     IC.MaxArraySizeForCombine = MaxArraySize;
     bool MadeChangeInThisIteration = IC.prepareWorklist(F);
     MadeChangeInThisIteration |= IC.run();
@@ -6263,6 +6264,7 @@ PreservedAnalyses InstCombinePass::run(Function &F,
     return PreservedAnalyses::all();
 
   auto &AC = AM.getResult<AssumptionAnalysis>(F);
+  auto &KBD = AM.getResult<KnownBitsDataflowAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &ORE = AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
@@ -6276,8 +6278,8 @@ PreservedAnalyses InstCombinePass::run(Function &F,
       &AM.getResult<BlockFrequencyAnalysis>(F) : nullptr;
   auto *BPI = AM.getCachedResult<BranchProbabilityAnalysis>(F);
 
-  if (!combineInstructionsOverFunction(F, Worklist, AA, AC, TLI, TTI, DT, ORE,
-                                       BFI, BPI, PSI, Options)) {
+  if (!combineInstructionsOverFunction(F, Worklist, AA, AC, KBD, TLI, TTI, DT,
+                                       ORE, BFI, BPI, PSI, Options)) {
     // No changes, all analyses are preserved.
     LRT.update(&ID, /*Changed=*/false);
     return PreservedAnalyses::all();
@@ -6299,6 +6301,7 @@ void InstructionCombiningPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetTransformInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
+  AU.addRequired<KnownBitsDataflowAnalysisWrapperPass>();
   AU.addPreserved<AAResultsWrapperPass>();
   AU.addPreserved<GlobalsAAWrapperPass>();
   AU.addRequired<ProfileSummaryInfoWrapperPass>();
@@ -6311,6 +6314,7 @@ bool InstructionCombiningPass::runOnFunction(Function &F) {
 
   // Required analyses.
   auto AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
+  auto &KBD = getAnalysis<KnownBitsDataflowAnalysisWrapperPass>().getResult();
   auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
   auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
   auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
@@ -6329,8 +6333,9 @@ bool InstructionCombiningPass::runOnFunction(Function &F) {
           getAnalysisIfAvailable<BranchProbabilityInfoWrapperPass>())
     BPI = &WrapperPass->getBPI();
 
-  return combineInstructionsOverFunction(F, Worklist, AA, AC, TLI, TTI, DT, ORE,
-                                         BFI, BPI, PSI, InstCombineOptions());
+  return combineInstructionsOverFunction(F, Worklist, AA, AC, KBD, TLI, TTI, DT,
+                                         ORE, BFI, BPI, PSI,
+                                         InstCombineOptions());
 }
 
 char InstructionCombiningPass::ID = 0;
@@ -6340,6 +6345,7 @@ InstructionCombiningPass::InstructionCombiningPass() : FunctionPass(ID) {}
 INITIALIZE_PASS_BEGIN(InstructionCombiningPass, "instcombine",
                       "Combine redundant instructions", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
+INITIALIZE_PASS_DEPENDENCY(KnownBitsDataflowAnalysisWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)

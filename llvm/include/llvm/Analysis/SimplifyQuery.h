@@ -19,6 +19,7 @@ class AssumptionCache;
 class DomConditionCache;
 class DominatorTree;
 class TargetLibraryInfo;
+class KnownBitsDataflow;
 
 /// InstrInfoQuery provides an interface to query additional information for
 /// instructions like metadata or keywords like nsw, which provides conservative
@@ -71,6 +72,7 @@ struct CondContext {
 struct SimplifyQuery {
 private:
   const Function *CtxF = nullptr;
+  KnownBitsDataflow *KBCache = nullptr;
 
 public:
   const DataLayout &DL;
@@ -159,6 +161,15 @@ public:
     Copy.CC = nullptr;
     return Copy;
   }
+
+  SimplifyQuery getWithKBCache(KnownBitsDataflow *KBCache) const {
+    SimplifyQuery Copy(*this);
+    Copy.KBCache = KBCache;
+    return Copy;
+  }
+
+  LLVM_ABI std::optional<KnownBits> getCachedKnownBits(const Value *V) const;
+  LLVM_ABI void cacheKnownBits(const Value *V, const KnownBits &Known);
 };
 
 } // end namespace llvm

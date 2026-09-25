@@ -21,6 +21,7 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Analysis/DomConditionCache.h"
 #include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/Analysis/KnownBitsDataflow.h"
 #include "llvm/Analysis/TargetFolder.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/IRBuilder.h"
@@ -91,6 +92,7 @@ protected:
   TargetLibraryInfo &TLI;
   DominatorTree &DT;
   const DataLayout &DL;
+  KnownBitsDataflow KBCache;
   SimplifyQuery SQ;
   OptimizationRemarkEmitter &ORE;
   BlockFrequencyInfo *BFI;
@@ -129,7 +131,7 @@ public:
         Builder(F.getContext(), TargetFolder(DL),
                 IRBuilderInstCombineInserter(*this)),
         Worklist(Worklist), F(F), MinimizeSize(F.hasMinSize()), AA(AA), AC(AC),
-        TLI(TLI), DT(DT), DL(DL),
+        TLI(TLI), DT(DT), DL(DL), KBCache(DL),
         SQ(DL, &TLI, &DT, &AC, nullptr, /*UseInstrInfo*/ true,
            /*CanUseUndef*/ true, &DC),
         ORE(ORE), BFI(BFI), BPI(BPI), PSI(PSI), RPOT(RPOT) {}
@@ -467,25 +469,39 @@ public:
 
   void computeKnownBits(const Value *V, KnownBits &Known,
                         const Instruction *CtxI, unsigned Depth = 0) const {
-    llvm::computeKnownBits(V, Known, SQ.getWithInstruction(CtxI), Depth);
+    llvm::computeKnownBits(V, Known,
+                           SQ.getWithInstruction(CtxI).getWithKBCache(
+                               const_cast<KnownBitsDataflow *>(&KBCache)),
+                           Depth);
   }
 
   KnownBits computeKnownBits(const Value *V, const Instruction *CtxI,
                              unsigned Depth = 0) const {
-    return llvm::computeKnownBits(V, SQ.getWithInstruction(CtxI), Depth);
+    return llvm::computeKnownBits(
+        V,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)),
+        Depth);
   }
 
   bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero = false,
                               const Instruction *CtxI = nullptr,
                               unsigned Depth = 0) {
-    return llvm::isKnownToBeAPowerOfTwo(V, OrZero, SQ.getWithInstruction(CtxI),
-                                        Depth);
+    return llvm::isKnownToBeAPowerOfTwo(
+        V, OrZero,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)),
+        Depth);
   }
 
   bool MaskedValueIsZero(const Value *V, const APInt &Mask,
                          const Instruction *CtxI = nullptr,
                          unsigned Depth = 0) const {
-    return llvm::MaskedValueIsZero(V, Mask, SQ.getWithInstruction(CtxI), Depth);
+    return llvm::MaskedValueIsZero(
+        V, Mask,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)),
+        Depth);
   }
 
   unsigned ComputeNumSignBits(const Value *Op,
@@ -512,7 +528,10 @@ public:
                                                const Instruction *CtxI,
                                                bool IsNSW = false) const {
     return llvm::computeOverflowForUnsignedMul(
-        LHS, RHS, SQ.getWithInstruction(CtxI), IsNSW);
+        LHS, RHS,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)),
+        IsNSW);
   }
 
   OverflowResult computeOverflowForSignedMul(const Value *LHS, const Value *RHS,
@@ -525,29 +544,37 @@ public:
   computeOverflowForUnsignedAdd(const WithCache<const Value *> &LHS,
                                 const WithCache<const Value *> &RHS,
                                 const Instruction *CtxI) const {
-    return llvm::computeOverflowForUnsignedAdd(LHS, RHS,
-                                               SQ.getWithInstruction(CtxI));
+    return llvm::computeOverflowForUnsignedAdd(
+        LHS, RHS,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)));
   }
 
   OverflowResult
   computeOverflowForSignedAdd(const WithCache<const Value *> &LHS,
                               const WithCache<const Value *> &RHS,
                               const Instruction *CtxI) const {
-    return llvm::computeOverflowForSignedAdd(LHS, RHS,
-                                             SQ.getWithInstruction(CtxI));
+    return llvm::computeOverflowForSignedAdd(
+        LHS, RHS,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)));
   }
 
   OverflowResult computeOverflowForUnsignedSub(const Value *LHS,
                                                const Value *RHS,
                                                const Instruction *CtxI) const {
-    return llvm::computeOverflowForUnsignedSub(LHS, RHS,
-                                               SQ.getWithInstruction(CtxI));
+    return llvm::computeOverflowForUnsignedSub(
+        LHS, RHS,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)));
   }
 
   OverflowResult computeOverflowForSignedSub(const Value *LHS, const Value *RHS,
                                              const Instruction *CtxI) const {
-    return llvm::computeOverflowForSignedSub(LHS, RHS,
-                                             SQ.getWithInstruction(CtxI));
+    return llvm::computeOverflowForSignedSub(
+        LHS, RHS,
+        SQ.getWithInstruction(CtxI).getWithKBCache(
+            const_cast<KnownBitsDataflow *>(&KBCache)));
   }
 
   virtual bool SimplifyDemandedBits(Instruction *I, unsigned OpNo,
@@ -558,7 +585,8 @@ public:
   bool SimplifyDemandedBits(Instruction *I, unsigned OpNo,
                             const APInt &DemandedMask, KnownBits &Known) {
     return SimplifyDemandedBits(I, OpNo, DemandedMask, Known,
-                                SQ.getWithInstruction(I));
+                                SQ.getWithInstruction(I).getWithKBCache(
+                                    const_cast<KnownBitsDataflow *>(&KBCache)));
   }
 
   virtual Value *

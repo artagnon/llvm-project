@@ -2640,6 +2640,12 @@ void computeKnownBits(const Value *V, const APInt &DemandedElts,
     return;
   }
 
+  // Directly use any cached values.
+  if (auto K = Q.getCachedKnownBits(V)) {
+    Known = *K;
+    return;
+  }
+
   // Start out not knowing anything.
   Known.resetAll();
 
@@ -2685,6 +2691,10 @@ void computeKnownBits(const Value *V, const APInt &DemandedElts,
 
   // Check whether we can determine known bits from context such as assumes.
   computeKnownBitsFromContext(V, Known, Q, Depth);
+
+  // Update the KnownBits cache for zero depth.
+  if (!Depth)
+    const_cast<SimplifyQuery &>(Q).cacheKnownBits(V, Known);
 }
 
 /// Try to detect a recurrence that the value of the induction variable is

@@ -816,10 +816,12 @@ Value *InstCombinerImpl::getShiftedValue(Value *V, unsigned NumBits,
   case Instruction::Or:
   case Instruction::Xor:
     // Bitwise operators can all arbitrarily be arbitrarily evaluated shifted.
-    I->setOperand(
-        0, getShiftedValue(I->getOperand(0), NumBits, IsLeftShift, Semantics));
-    I->setOperand(
-        1, getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 0,
+        getShiftedValue(I->getOperand(0), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 1,
+        getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
     return I;
 
   case Instruction::Shl:
@@ -828,10 +830,12 @@ Value *InstCombinerImpl::getShiftedValue(Value *V, unsigned NumBits,
                             Semantics, Builder);
 
   case Instruction::Select:
-    I->setOperand(
-        1, getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
-    I->setOperand(
-        2, getShiftedValue(I->getOperand(2), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 1,
+        getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 2,
+        getShiftedValue(I->getOperand(2), NumBits, IsLeftShift, Semantics));
     return I;
   case Instruction::PHI: {
     // We can change a phi if we can change all operands.  Note that we never
@@ -857,10 +861,12 @@ Value *InstCombinerImpl::getShiftedValue(Value *V, unsigned NumBits,
   case Instruction::Add: {
     if (IsLeftShift)
       I->dropPoisonGeneratingFlags();
-    I->setOperand(
-        0, getShiftedValue(I->getOperand(0), NumBits, IsLeftShift, Semantics));
-    I->setOperand(
-        1, getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 0,
+        getShiftedValue(I->getOperand(0), NumBits, IsLeftShift, Semantics));
+    replaceOperand(
+        *I, 1,
+        getShiftedValue(I->getOperand(1), NumBits, IsLeftShift, Semantics));
     return I;
   }
   }

@@ -9239,7 +9239,7 @@ Instruction *InstCombinerImpl::visitFCmpInst(FCmpInst &I) {
     case FCmpInst::FCMP_UNE: // True if unordered or not equal
       // Canonicalize these to be 'fcmp uno %X, 0.0'.
       I.setPredicate(FCmpInst::FCMP_UNO);
-      I.setOperand(1, Constant::getNullValue(OpType));
+      replaceOperand(I, 1, Constant::getNullValue(OpType));
       return &I;
 
     case FCmpInst::FCMP_ORD: // True if ordered (no nans)
@@ -9248,7 +9248,7 @@ Instruction *InstCombinerImpl::visitFCmpInst(FCmpInst &I) {
     case FCmpInst::FCMP_OLE: // True if ordered and less than or equal
       // Canonicalize these to be 'fcmp ord %X, 0.0'.
       I.setPredicate(FCmpInst::FCMP_ORD);
-      I.setOperand(1, Constant::getNullValue(OpType));
+      replaceOperand(I, 1, Constant::getNullValue(OpType));
       return &I;
     }
   }

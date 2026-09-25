@@ -412,7 +412,7 @@ Value *InstCombinerImpl::SimplifyDemandedUseBits(Instruction *I,
     if (match(I->getOperand(1), m_APInt(C)) && !C->isAllOnes()) {
       if ((*C | ~DemandedMask).isAllOnes()) {
         // Force bits to 1 to create a 'not' op.
-        I->setOperand(1, ConstantInt::getAllOnesValue(VTy));
+        replaceOperand(*I, 1, ConstantInt::getAllOnesValue(VTy));
         return I;
       }
       // If we can't turn this into a 'not', try to shrink the constant.
@@ -453,8 +453,8 @@ Value *InstCombinerImpl::SimplifyDemandedUseBits(Instruction *I,
     // try to keep the selected constants the same as icmp value constants, if
     // we can. This helps not break apart (or helps put back together)
     // canonical patterns like min and max.
-    auto CanonicalizeSelectConstant = [](Instruction *I, unsigned OpNo,
-                                         const APInt &DemandedMask) {
+    auto CanonicalizeSelectConstant = [&](Instruction *I, unsigned OpNo,
+                                          const APInt &DemandedMask) {
       const APInt *SelC;
       if (!match(I->getOperand(OpNo), m_APInt(SelC)))
         return false;
@@ -475,7 +475,7 @@ Value *InstCombinerImpl::SimplifyDemandedUseBits(Instruction *I,
       // If the constants are not already the same, but can be with the demand
       // mask, use the constant value from the ICmp.
       if ((*CmpC & DemandedMask) == (*SelC & DemandedMask)) {
-        I->setOperand(OpNo, ConstantInt::get(I->getType(), *CmpC));
+        replaceOperand(*I, OpNo, ConstantInt::get(I->getType(), *CmpC));
         return true;
       }
       return ShrinkDemandedConstant(I, OpNo, DemandedMask);
@@ -1725,7 +1725,7 @@ Value *InstCombinerImpl::SimplifyDemandedVectorElts(Value *V,
     if (all_of(Shuffle->getShuffleMask(), equal_to(0)) &&
         DemandedElts.isAllOnes()) {
       if (!isa<PoisonValue>(I->getOperand(1))) {
-        I->setOperand(1, PoisonValue::get(I->getOperand(1)->getType()));
+        replaceOperand(*I, 1, PoisonValue::get(I->getOperand(1)->getType()));
         MadeChange = true;
       }
       APInt LeftDemanded(OpWidth, 1);
@@ -2928,13 +2928,13 @@ Value *InstCombinerImpl::SimplifyDemandedUseFPClass(Instruction *I,
 
       if ((DemandedMask & fcNegative) == DemandedMask) {
         // Roundabout way of replacing with fneg(fabs)
-        CI->setOperand(1, ConstantFP::get(VTy, -1.0));
+        replaceOperand(*CI, 1, ConstantFP::get(VTy, -1.0));
         return I;
       }
 
       if ((DemandedMask & fcPositive) == DemandedMask) {
         // Roundabout way of replacing with fabs
-        CI->setOperand(1, ConstantFP::getZero(VTy));
+        replaceOperand(*CI, 1, ConstantFP::getZero(VTy));
         return I;
       }
 
@@ -2956,13 +2956,13 @@ Value *InstCombinerImpl::SimplifyDemandedUseFPClass(Instruction *I,
 
       if (KnownSign.getSignBit() == false) {
         CI->dropUBImplyingAttrsAndMetadata();
-        CI->setOperand(1, ConstantFP::getZero(VTy));
+        replaceOperand(*CI, 1, ConstantFP::getZero(VTy));
         return I;
       }
 
       if (KnownSign.getSignBit() == true) {
         CI->dropUBImplyingAttrsAndMetadata();
-        CI->setOperand(1, ConstantFP::get(VTy, -1.0));
+        replaceOperand(*CI, 1, ConstantFP::get(VTy, -1.0));
         return I;
       }
 

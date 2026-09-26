@@ -78,26 +78,31 @@ KnownBitsVH KnownBitsDataflow::getVH(const Value *V) const {
   return It->first;
 }
 
+template <typename ValueT> static bool isKnownBitsTy(const ValueT &V) {
+  return V->getType()->getScalarType()->isIntOrPtrTy();
+}
+
 /// A wrapper around make_filter_range, that filters \p R on scalar types that
 /// are either integer or pointer type, as these are the only types handled by
 /// computeKnownBits.
 template <typename RangeT>
 static auto make_knownbits_range(RangeT &&R) { // NOLINT
-  return make_filter_range(R, [](const auto &V) {
-    return V->getType()->getScalarType()->isIntOrPtrTy();
-  });
+  return make_filter_range(R, [](const auto &V) { return isKnownBitsTy(V); });
 }
 
 SmallSet<KnownBitsVH, 8>
-KnownBitsDataflow::forwardDataflow(ArrayRef<KnownBitsVH> Roots,
-                                   bool Create) const {
+KnownBitsDataflow::forwardDataflow(ArrayRef<KnownBitsVH> Roots) const {
   SmallSet<KnownBitsVH, 8> Collected;
-  for (const auto &V : Roots)
-    for (const Value *N : make_knownbits_range(depth_first(V.getValue())))
-      if (!Create && contains(N))
-        Collected.insert(getVH(N));
-      else if (Create)
-        Collected.insert({N, this});
+  for (const KnownBitsVH &V : Roots) {
+    for (auto It = df_begin(V.getValue()); It != df_end(V.getValue());) {
+      if (contains(*It)) {
+        Collected.insert(getVH(*It));
+        ++It;
+        continue;
+      }
+      It = It.skipChildren();
+    }
+  }
   return Collected;
 }
 
@@ -112,30 +117,28 @@ unsigned KnownBitsDataflow::getBitWidth(Type *Ty, const DataLayout &DL) {
   return DL.getPointerTypeSizeInBits(Ty);
 }
 
-template <typename RangeT> void KnownBitsDataflow::insert_range(RangeT &&R) {
-  for (const KnownBitsVH &V : make_knownbits_range(R))
-    BaseT::emplace_or_assign(
-        V, KnownBits(getBitWidth(V->getType(), getDataLayout())));
-}
-
-SmallVector<KnownBitsVH> KnownBitsDataflow::computeRoots(const Function &F,
-                                                         bool Create) const {
+SmallVector<KnownBitsVH>
+KnownBitsDataflow::computeRoots(const Function &F) const {
   SmallVector<KnownBitsVH> Roots;
 
   // First, collect function arguments.
   for (const Value *V : make_knownbits_range(make_pointer_range(F.args())))
-    if (!Create && contains(V))
-      Roots.emplace_back(getVH(V));
-    else if (Create)
-      Roots.emplace_back(V, this);
+    Roots.emplace_back(getVH(V));
 
   // A helper to find out whether a Value is reachable from Roots that computes
   // the reachability information just in time, as Roots are updated.
   auto IsReachableFromRoots = [&](const Value *V) {
-    for (const auto &R : Roots)
-      for (const Value *N : make_knownbits_range(depth_first(R.getValue())))
-        if (N == V)
+    for (const auto &R : Roots) {
+      for (auto It = df_begin(R.getValue()); It != df_end(R.getValue());) {
+        if (*It == V)
           return true;
+        if (!isKnownBitsTy(*It)) {
+          It = It.skipChildren();
+          continue;
+        }
+        ++It;
+      }
+    }
     return false;
   };
 
@@ -143,28 +146,39 @@ SmallVector<KnownBitsVH> KnownBitsDataflow::computeRoots(const Function &F,
   // arguments, updating Roots, as we test for unreachability.
   for (const BasicBlock &BB : F)
     for (const Value *V : make_knownbits_range(make_pointer_range(BB)))
-      if (!IsReachableFromRoots(V)) {
-        if (!Create && contains(V))
-          Roots.emplace_back(getVH(V));
-        else if (Create)
-          Roots.emplace_back(V, this);
-      }
+      if (!IsReachableFromRoots(V))
+        Roots.emplace_back(getVH(V));
 
   return Roots;
 }
 
 void KnownBitsDataflow::initializeEntireGraph(const Function &F) {
-  insert_range(
-      forwardDataflow(computeRoots(F, /*Create=*/true), /*Create=*/true));
+  for (const Value *V : make_knownbits_range(make_pointer_range(F.args())))
+    insert_or_assign(V, KnownBits(getBitWidth(V->getType(), getDataLayout())));
+
+  // Now collect all Instructions that aren't reachable from the function's
+  // arguments, updating Roots, as we test for unreachability.
+  for (const BasicBlock &BB : F) {
+    for (const Value *V : make_knownbits_range(make_pointer_range(BB))) {
+      insert_or_assign(V,
+                       KnownBits(getBitWidth(V->getType(), getDataLayout())));
+    }
+  }
 }
 
 SmallVector<KnownBitsVH>
 KnownBitsDataflow::orderedWalk(ArrayRef<KnownBitsVH> Roots) const {
   SetVector<KnownBitsVH> Collected;
-  for (const auto &V : Roots)
-    for (const Value *N : make_knownbits_range(depth_first(V.getValue())))
-      if (contains(N))
-        Collected.insert(getVH(N));
+  for (const auto &V : Roots) {
+    for (auto It = df_begin(V.getValue()); It != df_end(V.getValue());) {
+      if (contains(*It)) {
+        Collected.insert(getVH(*It));
+        ++It;
+        continue;
+      }
+      It = It.skipChildren();
+    }
+  }
   return Collected.takeVector();
 }
 

@@ -109,10 +109,6 @@ class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<AugmentedKnownBits> {
   /// The cache is valid for exactly one DL.
   const DataLayout &DL;
 
-  /// Helper to insert ValueHandles in the entire subgraph starting at \p R,
-  /// with unknown KnownBits information. Used for testing purposes.
-  template <typename RangeT> void insert_range(RangeT &&R); // NOLINT
-
   /// Used to clean up after an IR Value is erased, carefully written not to use
   /// ValueHandle lookups.
   void cleanup() {
@@ -120,10 +116,8 @@ class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<AugmentedKnownBits> {
   }
 
   /// Do a forward data-flow walk, and find all Values whose KnownBits depeends
-  /// on the KnownBits of \p Roots, skipping any nodes not in the map. Pass \p
-  /// Create to create fresh ValueHandles from the walk, for insertion purposes.
-  SmallSet<KnownBitsVH, 8> forwardDataflow(ArrayRef<KnownBitsVH> Roots,
-                                           bool Create = false) const;
+  /// on the KnownBits of \p Roots, skipping any nodes not in the map.
+  SmallSet<KnownBitsVH, 8> forwardDataflow(ArrayRef<KnownBitsVH> Roots) const;
 
   /// Do a forward data-flow walk that is deterministically-ordered, starting
   /// from \p Roots, for testing and debugging purposes.
@@ -139,19 +133,18 @@ protected:
   /// forwardDataflow walk starting from \p V. Used on IR manipulation.
   LLVM_ABI_FOR_TEST void invalidate(const KnownBitsVH &V);
 
-  /// Roots are the function \p F's arguments, along with Instructions that
-  /// expose a new root like phis and fptosi. This is used in print, skipping
-  /// any nodes not in the map. Pass \p Create to create fresh ValueHandles from
-  /// the walk, for insertion purposes.
-  LLVM_ABI_FOR_TEST SmallVector<KnownBitsVH>
-  computeRoots(const Function &F, bool Create = false) const;
-
   /// A leaf is a Value whose users filtered on a KnownBits range is empty. Used
   /// in print.
   LLVM_ABI_FOR_TEST bool isLeaf(const KnownBitsVH &V) const;
 
-  /// Initializing the entire graph for Function \p F. It is expensive, and is
-  /// used only for testing purposes.
+  /// Roots are the function \p F's arguments, along with Instructions that
+  /// expose a new root like phis and fptosi. This is used in print, skipping
+  /// any nodes not in the map.
+  LLVM_ABI_FOR_TEST SmallVector<KnownBitsVH>
+  computeRoots(const Function &F) const;
+
+  /// Initializing the entire graph for Function \p F with unknown known-bits.
+  /// It is expensive, and is used only for testing purposes.
   LLVM_ABI_FOR_TEST void initializeEntireGraph(const Function &F);
 
 public:

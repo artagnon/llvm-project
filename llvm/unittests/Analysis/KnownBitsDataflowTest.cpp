@@ -41,7 +41,7 @@ struct DataflowForTest : public KnownBitsDataflow {
 private:
   const Function &F;
   AugmentedKnownBits &getValRef(const Value *V) {
-    return BaseT::operator[](getVH(V));
+    return BaseT::operator[](key_as(V));
   }
 
 public:
@@ -67,7 +67,7 @@ public:
   void setAllZero(const Value *V) { getValRef(V).setAllZero(); }
   void setAllOnes(const Value *V) { getValRef(V).setAllOnes(); }
   void invalidate(const Value *V) {
-    return KnownBitsDataflow::invalidate(getVH(V));
+    return KnownBitsDataflow::invalidate(key_as(V));
   }
   bool isAllOnes(const Value *V) const {
     return at(V).isAllOnes();

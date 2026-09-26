@@ -7,12 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/KnownBitsDataflow.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/SimplifyQuery.h"
 #include "llvm/IR/DataLayout.h"
@@ -47,15 +45,11 @@ struct GraphTraits<const Value *>
 };
 } // namespace llvm
 
-SQCompatibility::SQCompatibility(const SimplifyQuery &SQ)
-    : CtxI(const_cast<Instruction *>(SQ.CtxI)), TLI(SQ.TLI), AC(SQ.AC),
-      DT(SQ.DT), DC(SQ.DC), CC(SQ.CC), UseInstrInfo(SQ.IIQ.UseInstrInfo) {}
+CtxITracking::CtxITracking(const SimplifyQuery &SQ)
+    : WeakVH(const_cast<Instruction *>(SQ.CtxI)) {}
 
-bool SQCompatibility::isRefinementOf(const SQCompatibility &Other) const {
-  return (!CtxI || CtxI == Other.CtxI) && (!TLI || TLI == Other.TLI) &&
-         (!AC || AC == Other.AC) && (!CtxI || DT == Other.DT) &&
-         (!DC || DC == Other.DC) && (!CC || CC == Other.CC) &&
-         (!UseInstrInfo || UseInstrInfo == Other.UseInstrInfo);
+bool CtxITracking::isRefinementOf(const CtxITracking &Other) const {
+  return !getValPtr() || getValPtr() == Other.getValPtr();
 }
 
 void KnownBitsVH::deleted() {
@@ -89,7 +83,7 @@ auto KnownBitsDataflow::forwardDataflow(const KnownBitsVH &V) const {
 
 void KnownBitsDataflow::invalidate(const KnownBitsVH &V) {
   for (const Value *N : forwardDataflow(V))
-    at_as(N).resetAll();
+    value_as(N).resetAll();
 }
 
 unsigned KnownBitsDataflow::getBitWidth(Type *Ty, const DataLayout &DL) {
@@ -104,7 +98,7 @@ KnownBitsDataflow::computeRoots(const Function &F) const {
 
   // First, collect function arguments.
   for (const Value *V : make_knownbits_range(make_pointer_range(F.args())))
-    Roots.emplace_back(getVH(V));
+    Roots.emplace_back(key_as(V));
 
   // A helper to find out whether a Value is reachable from Roots that computes
   // the reachability information just in time, as Roots are updated.
@@ -121,7 +115,7 @@ KnownBitsDataflow::computeRoots(const Function &F) const {
   for (const BasicBlock &BB : F)
     for (const Value *V : make_knownbits_range(make_pointer_range(BB)))
       if (!IsReachableFromRoots(V))
-        Roots.emplace_back(getVH(V));
+        Roots.emplace_back(key_as(V));
 
   return Roots;
 }
@@ -164,7 +158,7 @@ void KnownBitsDataflow::print(const Function &F, raw_ostream &OS) const {
       OS << "  ";
     V->print(OS);
     OS << " | ";
-    at_as(V).print(OS);
+    value_as(V).print(OS);
     OS << "\n";
   }
 }
@@ -176,7 +170,7 @@ LLVM_DUMP_METHOD void KnownBitsDataflow::dump(const Function &F) const {
 #endif
 
 std::optional<KnownBits> KnownBitsDataflow::lookup(const Value *V,
-                                                   SQCompatibility Info) const {
+                                                   CtxITracking Info) const {
   auto It = find_as(V);
   if (It == end())
     return std::nullopt;
@@ -189,7 +183,7 @@ std::optional<KnownBits> KnownBitsDataflow::lookup(const Value *V,
 }
 
 void KnownBitsDataflow::insert_or_assign(const Value *V, const KnownBits &Known,
-                                         SQCompatibility Info) {
+                                         CtxITracking Info) {
   AugmentedKnownBits ToInsert(Known, Info);
   auto It = find_as(V);
   if (It != end())
@@ -199,8 +193,7 @@ void KnownBitsDataflow::insert_or_assign(const Value *V, const KnownBits &Known,
 
 std::optional<KnownBits>
 SimplifyQuery::getCachedKnownBits(const Value *V) const {
-  // We do not bother with checking compatibility of context-functions.
-  if (!KBCache || CtxF)
+  if (!KBCache || TLI || AC || DT || DC || CC || IIQ.UseInstrInfo || CtxF)
     return std::nullopt;
   return KBCache->lookup(V, *this);
 }

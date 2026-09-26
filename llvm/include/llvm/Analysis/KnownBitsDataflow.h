@@ -72,30 +72,19 @@ template <typename ValueT>
 using DenseMapForVH =
     DenseMap<KnownBitsVH, ValueT, DenseMapInfo<const Value *>>;
 
-/// Distillation of compatibility of two different SimplifyQueries. Identical to
-/// SimplifyQuery, except that it drops DL and CxtF, and uses a Weak ValueHandle
-/// for the context-instruction to account for invalidation.
-struct SQCompatibility {
-  WeakVH CtxI;
-  const TargetLibraryInfo *TLI;
-  const AssumptionCache *AC;
-  const DominatorTree *DT;
-  const DomConditionCache *DC;
-  const CondContext *CC;
-  unsigned short UseInstrInfo : 1;
-
-public:
-  SQCompatibility() : UseInstrInfo(0) {}
-  SQCompatibility(const SimplifyQuery &SQ);
-  bool isRefinementOf(const SQCompatibility &Other) const;
+/// Tracks CxtI from SimplifyQuery.
+struct CtxITracking : public WeakVH {
+  CtxITracking() = default;
+  CtxITracking(const SimplifyQuery &SQ);
+  bool isRefinementOf(const CtxITracking &Other) const;
 };
 
 /// The ValueT of our DenseMap is actually a KnownBits augmented with
-/// SimplifyQuery-compatability information.
-struct AugmentedKnownBits : public KnownBits, public SQCompatibility {
+/// context-instruction information.
+struct AugmentedKnownBits : public KnownBits, public CtxITracking {
   AugmentedKnownBits() = default;
-  AugmentedKnownBits(const KnownBits &Known, SQCompatibility Info = {})
-      : KnownBits(Known), SQCompatibility(Info) {}
+  AugmentedKnownBits(const KnownBits &Known, CtxITracking Info = {})
+      : KnownBits(Known), CtxITracking(Info) {}
 };
 
 /// A structure keeps a mapping between a custom ValueHandle and
@@ -126,13 +115,18 @@ class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<AugmentedKnownBits> {
 protected:
   using BaseT = DenseMapForVH<AugmentedKnownBits>;
 
-  /// Get an existing ValueHandle.
-  LLVM_ABI_FOR_TEST KnownBitsVH getVH(const Value *V) const {
+  LLVM_ABI_FOR_TEST KnownBitsVH key_as(const Value *V) const { // NOLINT
     auto It = find_as(V);
     assert(It != end() && "Expected to find ValueHandle");
     return It->first;
   }
-  LLVM_ABI_FOR_TEST AugmentedKnownBits at_as(const Value *V) const { // NOLINT
+  LLVM_ABI_FOR_TEST AugmentedKnownBits &value_as(const Value *V) { // NOLINT
+    auto It = find_as(V);
+    assert(It != end() && "Expected to find ValueHandle");
+    return It->second;
+  }
+  LLVM_ABI_FOR_TEST AugmentedKnownBits
+  value_as(const Value *V) const { // NOLINT
     auto It = find_as(V);
     assert(It != end() && "Expected to find ValueHandle");
     return It->second;
@@ -171,14 +165,14 @@ public:
 
   /// Looks up \p V if it is present in the map, and returns a previously cached
   /// KnownBits that is not unknown, or std::nullopt. Pass \p Info to filter on
-  /// compatibility info.
+  /// compatibility of context-instructions.
   LLVM_ABI std::optional<KnownBits> lookup(const Value *V,
-                                           SQCompatibility Info = {}) const;
+                                           CtxITracking Info = {}) const;
 
   /// Registers that \p V has KnownBits information \p Known, with
-  /// compatibility info \p Info, overwriting any existing value.
+  /// conext-instruction \p Info, overwriting any existing value.
   LLVM_ABI void insert_or_assign(const Value *V, const KnownBits &Known,
-                                 SQCompatibility Info = {});
+                                 CtxITracking Info = {});
 
   /// This routine prints in determinstic order, at the cost of being expensive.
   LLVM_ABI void print(const Function &F, raw_ostream &OS) const;

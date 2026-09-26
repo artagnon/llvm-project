@@ -59,7 +59,7 @@ public:
   // Returns an unordered list.
   auto computeLeaves() const {
     return make_filter_range(
-        keys(), [this](const KnownBitsVH &V) { return isLeaf(V); });
+        keys(), [this](const KnownBitsVH &V) { return isLeaf(V.getValue()); });
   }
   void setKB(const Value *V, KnownBits Known) {
     getValRef(V) = Known;

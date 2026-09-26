@@ -115,19 +115,28 @@ class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<AugmentedKnownBits> {
     remove_if([&](const auto &KV) { return KV.first.getValue() == nullptr; });
   }
 
-  /// Do a forward data-flow walk, and find all Values whose KnownBits depeends
-  /// on the KnownBits of \p Roots, skipping any nodes not in the map.
-  SmallSet<KnownBitsVH, 8> forwardDataflow(ArrayRef<KnownBitsVH> Roots) const;
+  /// Do a forward data-flow walk, and find all ValueHandles whose KnownBits
+  /// depeends on the KnownBits of \p V. Returns a range of Values.
+  auto forwardDataflow(const KnownBitsVH &V) const;
 
-  /// Do a forward data-flow walk that is deterministically-ordered, starting
-  /// from \p Roots, for testing and debugging purposes.
-  SmallVector<KnownBitsVH> orderedWalk(ArrayRef<KnownBitsVH> Roots) const;
+  /// Range-based variant.
+  template <typename RangeT>
+  SmallVector<const Value *> forwardDataflow(RangeT &&Roots) const;
 
 protected:
   using BaseT = DenseMapForVH<AugmentedKnownBits>;
 
   /// Get an existing ValueHandle.
-  LLVM_ABI_FOR_TEST KnownBitsVH getVH(const Value *V) const;
+  LLVM_ABI_FOR_TEST KnownBitsVH getVH(const Value *V) const {
+    auto It = find_as(V);
+    assert(It != end() && "Expected to find ValueHandle");
+    return It->first;
+  }
+  LLVM_ABI_FOR_TEST AugmentedKnownBits at_as(const Value *V) const { // NOLINT
+    auto It = find_as(V);
+    assert(It != end() && "Expected to find ValueHandle");
+    return It->second;
+  }
 
   /// Invalidates KnownBits in the entire subgraph found from the
   /// forwardDataflow walk starting from \p V. Used on IR manipulation.
@@ -135,7 +144,7 @@ protected:
 
   /// A leaf is a Value whose users filtered on a KnownBits range is empty. Used
   /// in print.
-  LLVM_ABI_FOR_TEST bool isLeaf(const KnownBitsVH &V) const;
+  LLVM_ABI_FOR_TEST bool isLeaf(const Value *V) const;
 
   /// Roots are the function \p F's arguments, along with Instructions that
   /// expose a new root like phis and fptosi. This is used in print, skipping

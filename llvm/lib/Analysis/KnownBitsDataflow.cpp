@@ -72,43 +72,24 @@ void KnownBitsVH::allUsesReplacedWith(Value *New) {
   setValPtr(New);
 }
 
-KnownBitsVH KnownBitsDataflow::getVH(const Value *V) const {
-  auto It = find_as(V);
-  assert(It != end() && "Expected to find ValueHandle");
-  return It->first;
-}
-
-template <typename ValueT> static bool isKnownBitsTy(const ValueT &V) {
-  return V->getType()->getScalarType()->isIntOrPtrTy();
-}
-
 /// A wrapper around make_filter_range, that filters \p R on scalar types that
 /// are either integer or pointer type, as these are the only types handled by
 /// computeKnownBits.
 template <typename RangeT>
 static auto make_knownbits_range(RangeT &&R) { // NOLINT
-  return make_filter_range(R, [](const auto &V) { return isKnownBitsTy(V); });
+  return make_filter_range(R, [](const auto &V) {
+    return V->getType()->getScalarType()->isIntOrPtrTy();
+  });
 }
 
-SmallSet<KnownBitsVH, 8>
-KnownBitsDataflow::forwardDataflow(ArrayRef<KnownBitsVH> Roots) const {
-  SmallSet<KnownBitsVH, 8> Collected;
-  for (const KnownBitsVH &V : Roots) {
-    for (auto It = df_begin(V.getValue()); It != df_end(V.getValue());) {
-      if (contains(*It)) {
-        Collected.insert(getVH(*It));
-        ++It;
-        continue;
-      }
-      It = It.skipChildren();
-    }
-  }
-  return Collected;
+auto KnownBitsDataflow::forwardDataflow(const KnownBitsVH &V) const {
+  return make_filter_range(depth_first(V.getValue()),
+                           bind_front(&KnownBitsDataflow::contains, this));
 }
 
 void KnownBitsDataflow::invalidate(const KnownBitsVH &V) {
-  for (const KnownBitsVH &N : forwardDataflow(V))
-    at(N).resetAll();
+  for (const Value *N : forwardDataflow(V))
+    at_as(N).resetAll();
 }
 
 unsigned KnownBitsDataflow::getBitWidth(Type *Ty, const DataLayout &DL) {
@@ -128,17 +109,10 @@ KnownBitsDataflow::computeRoots(const Function &F) const {
   // A helper to find out whether a Value is reachable from Roots that computes
   // the reachability information just in time, as Roots are updated.
   auto IsReachableFromRoots = [&](const Value *V) {
-    for (const auto &R : Roots) {
-      for (auto It = df_begin(R.getValue()); It != df_end(R.getValue());) {
-        if (*It == V)
+    for (const auto &R : Roots)
+      for (const Value *N : make_knownbits_range(depth_first(R.getValue())))
+        if (N == V)
           return true;
-        if (!isKnownBitsTy(*It)) {
-          It = It.skipChildren();
-          continue;
-        }
-        ++It;
-      }
-    }
     return false;
   };
 
@@ -166,29 +140,22 @@ void KnownBitsDataflow::initializeEntireGraph(const Function &F) {
   }
 }
 
-SmallVector<KnownBitsVH>
-KnownBitsDataflow::orderedWalk(ArrayRef<KnownBitsVH> Roots) const {
-  SetVector<KnownBitsVH> Collected;
-  for (const auto &V : Roots) {
-    for (auto It = df_begin(V.getValue()); It != df_end(V.getValue());) {
-      if (contains(*It)) {
-        Collected.insert(getVH(*It));
-        ++It;
-        continue;
-      }
-      It = It.skipChildren();
-    }
-  }
+template <typename RangeT>
+SmallVector<const Value *>
+KnownBitsDataflow::forwardDataflow(RangeT &&Roots) const {
+  SetVector<const Value *> Collected;
+  for (const auto &V : Roots)
+    Collected.insert_range(forwardDataflow(V));
   return Collected.takeVector();
 }
 
-bool KnownBitsDataflow::isLeaf(const KnownBitsVH &V) const {
+bool KnownBitsDataflow::isLeaf(const Value *V) const {
   return make_knownbits_range(V->users()).empty();
 }
 
 void KnownBitsDataflow::print(const Function &F, raw_ostream &OS) const {
   auto Roots = computeRoots(F);
-  for (const KnownBitsVH &V : orderedWalk(Roots)) {
+  for (const Value *V : forwardDataflow(Roots)) {
     if (is_contained(Roots, V))
       OS << "^ ";
     else if (isLeaf(V))
@@ -197,7 +164,7 @@ void KnownBitsDataflow::print(const Function &F, raw_ostream &OS) const {
       OS << "  ";
     V->print(OS);
     OS << " | ";
-    at(V).print(OS);
+    at_as(V).print(OS);
     OS << "\n";
   }
 }

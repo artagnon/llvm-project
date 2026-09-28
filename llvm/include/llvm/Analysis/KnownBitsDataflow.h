@@ -5,32 +5,54 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+// Caches KnownBits for a given IR Value, aand invalidates the cached results on
+// IR updates via a custom Callback ValueHandle. As such, what's provided is an
+// empty DenseMap with an API to insert and lookup.
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_KNOWNBITSDATAFLOW_H
 #define LLVM_ANALYSIS_KNOWNBITSDATAFLOW_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/GraphTraits.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/Value.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/KnownBits.h"
 #include <memory>
 
 namespace llvm {
-class Value;
-class Instruction;
-class User;
 class Function;
 class DataLayout;
 class raw_ostream;
 class KnownBitsDataflow;
-class TargetLibraryInfo;
-class AssumptionCache;
-class DominatorTree;
-class DomConditionCache;
-struct CondContext;
+
+/// GraphTraits specializing for depth_first over Values.
+template <typename NodeRef, typename ChildIteratorType>
+struct NodeGraphTraitsBase {
+  static NodeRef getEntryNode(NodeRef N) { return N; }
+  static ChildIteratorType child_begin(NodeRef N) { // NOLINT
+    return N->user_begin();
+  }
+  static ChildIteratorType child_end(NodeRef N) { // NOLINT
+    return N->user_end();
+  }
+};
+
+template <>
+struct GraphTraits<Value *>
+    : public NodeGraphTraitsBase<Value *, Value::user_iterator> {
+  using NodeRef = Value *;
+  using ChildIteratorType = Value::user_iterator;
+};
 
 /// A custom ValueHandle with callback to erase KnownBits in the cache when a
 /// Value is deleted, or invalidate dependent KnownBits when RAUW'ed.
@@ -81,8 +103,14 @@ using DenseMapForVH =
 struct KnownBitsWithCtxI : public KnownBits {
   WeakVH CtxI;
   KnownBitsWithCtxI() = default;
-  KnownBitsWithCtxI(const KnownBits &Known, const Instruction *CtxI);
-  bool canUseWith(const Instruction *Other) const;
+  KnownBitsWithCtxI(const KnownBits &Known, const Instruction *CtxI)
+      : KnownBits(Known), CtxI(const_cast<Instruction *>(CtxI)) {}
+  bool canUseWith(const Instruction *Other) const {
+    // If the cached value was computed with a CtxI, and one without a CxtI is
+    // requested, returning the cached value would lead to an optimization
+    // benefit.
+    return !Other || Other == CtxI;
+  }
 };
 
 /// A structure keeps a mapping between a custom ValueHandle and
@@ -93,16 +121,12 @@ struct KnownBitsWithCtxI : public KnownBits {
 class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<KnownBitsWithCtxI> {
   friend class KnownBitsVH;
 
-  /// The cache is valid for exactly one DL.
-  const DataLayout &DL;
-
   /// Do a forward data-flow walk, and find all ValueHandles whose KnownBits
   /// depeends on the KnownBits of \p V. Returns a range of Values.
-  auto forwardDataflow(const KnownBitsVH &V) const;
-
-  /// Range-based variant.
-  template <typename RangeT>
-  SmallVector<const Value *> forwardDataflow(RangeT &&Roots) const;
+  auto forwardDataflow(const KnownBitsVH &V) const {
+    return make_filter_range(depth_first(V.getValPtr()),
+                             bind_front(&KnownBitsDataflow::contains, this));
+  }
 
 protected:
   using BaseT = DenseMapForVH<KnownBitsWithCtxI>;
@@ -125,11 +149,19 @@ protected:
 
   /// Invalidates KnownBits in the entire subgraph found from the
   /// forwardDataflow walk starting from \p V. Used on IR manipulation.
-  LLVM_ABI_FOR_TEST void invalidate(const KnownBitsVH &V);
+  LLVM_ABI_FOR_TEST void invalidate(const KnownBitsVH &V) {
+    for (const Value *N : forwardDataflow(V))
+      value_as(N).resetAll();
+  }
 
-  /// A leaf is a Value whose users filtered on a KnownBits range is empty. Used
-  /// in print.
-  LLVM_ABI_FOR_TEST bool isLeaf(const Value *V) const;
+  /// Range-based variant of forwardDataflow.
+  LLVM_ABI_FOR_TEST SmallVector<const Value *>
+  forwardDataflow(ArrayRef<KnownBitsVH> Roots) const;
+
+  /// Checks if \p V is present in the map.
+  LLVM_ABI_FOR_TEST bool contains(const Value *V) const {
+    return find_as(V) != end();
+  }
 
   /// Roots are the function \p F's arguments, along with Instructions that
   /// expose a new root like phis and fptosi. This is used in print, skipping
@@ -137,15 +169,10 @@ protected:
   LLVM_ABI_FOR_TEST SmallVector<KnownBitsVH>
   computeRoots(const Function &F) const;
 
-  /// Initializing the entire graph for Function \p F with unknown known-bits.
-  /// It is expensive, and is used only for testing purposes.
-  LLVM_ABI_FOR_TEST void initializeEntireGraph(const Function &F);
-
 public:
-  LLVM_ABI KnownBitsDataflow(const DataLayout &DL) : DL(DL) {}
+  LLVM_ABI KnownBitsDataflow() = default;
   LLVM_ABI KnownBitsDataflow(const KnownBitsDataflow &) = delete;
   LLVM_ABI KnownBitsDataflow &operator=(const KnownBitsDataflow &) = delete;
-  LLVM_ABI const DataLayout &getDataLayout() const { return DL; }
 
   /// A small helper extracted from ValueTracking.
   LLVM_ABI static unsigned getBitWidth(Type *Ty, const DataLayout &DL);
@@ -153,20 +180,33 @@ public:
   using BaseT::empty;
   using BaseT::size;
 
-  /// Checks if \p V is present in the map.
-  LLVM_ABI bool contains(const Value *V) const { return find_as(V) != end(); }
-
   /// Checks if \p V if it is present in the map, and if it has a
   /// non-invalidated (unknown) KnownBits, returning it if so. Pass \p CtxI to
   /// filter on compatibility of context-instructions.
-  LLVM_ABI std::optional<KnownBits>
-  lookup(const Value *V, const Instruction *CtxI = nullptr) const;
+  std::optional<KnownBits>
+      LLVM_ABI lookup(const Value *V, const Instruction *CtxI = nullptr) const {
+    // Constants should never be inserted into the map. This is the fast
+    // lookup-path.
+    if (isa<Constant>(V))
+      return std::nullopt;
+    auto It = find_as(V);
+    if (It == end())
+      return std::nullopt;
+    const KnownBitsWithCtxI &Known = It->second;
+    if (Known.isUnknown() || !Known.canUseWith(CtxI))
+      return std::nullopt;
+    return Known;
+  }
 
   /// Registers that \p V has KnownBits information \p Known, with
   /// conext-instruction \p CtxI, overwriting any existing value. Is a no-op on
-  /// unknown \p Known.
-  LLVM_ABI void emplace_as(const Value *V, const KnownBits &Known, // NOLINT
-                           const Instruction *CtxI = nullptr);
+  /// constant \p V and unknown \p Known.
+  void LLVM_ABI emplace_as(const Value *V, const KnownBits &Known, // NOLINT
+                           const Instruction *CtxI = nullptr) {
+    if (isa<Constant>(V) || Known.isUnknown())
+      return;
+    emplace_or_assign({V, this}, KnownBitsWithCtxI(Known, CtxI));
+  }
 
   /// This routine prints in determinstic order, at the cost of being expensive.
   LLVM_ABI void print(const Function &F, raw_ostream &OS) const;

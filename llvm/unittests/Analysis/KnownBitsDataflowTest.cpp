@@ -35,6 +35,13 @@ std::unique_ptr<Module> parseIR(LLVMContext &Ctx, StringRef Assembly) {
   return M;
 }
 
+template <typename RangeT>
+static auto make_knownbits_range(RangeT &&R) { // NOLINT
+  return make_filter_range(R, [](const auto &V) {
+    return V->getType()->getScalarType()->isIntOrPtrTy();
+  });
+}
+
 /// Simply exposes some routines in KnownBitsDataflow, and adds a few for
 /// testing.
 struct DataflowForTest : public KnownBitsDataflow {
@@ -42,8 +49,7 @@ private:
   const Function &F;
 
 public:
-  DataflowForTest(const Function &F)
-      : KnownBitsDataflow(F.getDataLayout()), F(F) {}
+  DataflowForTest(const Function &F) : F(F) {}
   SmallVector<KnownBitsVH, 16> computeRoots() const {
     return KnownBitsDataflow::computeRoots(F);
   }
@@ -55,8 +61,12 @@ public:
   }
   // Returns an unordered list.
   auto computeLeaves() const {
-    return make_filter_range(
-        keys(), [this](const KnownBitsVH &V) { return isLeaf(V.getValPtr()); });
+    auto IsLeaf = [](const Value *V) {
+      return make_knownbits_range(V->users()).empty();
+    };
+    return make_filter_range(keys(), [&IsLeaf](const KnownBitsVH &V) {
+      return IsLeaf(V.getValPtr());
+    });
   }
   void setKB(const Value *V, KnownBits Known) {
     value_as(V) = {Known, nullptr};
@@ -76,6 +86,27 @@ public:
 struct DataflowInitializerForTest : public DataflowForTest {
   DataflowInitializerForTest(Function &F) : DataflowForTest(F) {
     initializeEntireGraph(F);
+  }
+  void initializeEntireGraph(const Function &F) {
+    // We emplace all-conflict that's different from unknown for testing. This
+    // is because unknown KnownBits are used to represent invalidated values.
+    auto GetAllConflict = [](unsigned BitWidth) {
+      KnownBits Known(BitWidth);
+      Known.setAllConflict();
+      return Known;
+    };
+    for (const Value *V : make_knownbits_range(make_pointer_range(F.args())))
+      emplace_as(V, GetAllConflict(KnownBitsDataflow::getBitWidth(
+                        V->getType(), F.getDataLayout())));
+
+    // Now collect all Instructions that aren't reachable from the function's
+    // arguments, updating Roots, as we test for unreachability.
+    for (const BasicBlock &BB : F) {
+      for (const Value *V : make_knownbits_range(make_pointer_range(BB))) {
+        emplace_as(V, GetAllConflict(KnownBitsDataflow::getBitWidth(
+                          V->getType(), F.getDataLayout())));
+      }
+    }
   }
 };
 

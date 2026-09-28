@@ -6264,8 +6264,8 @@ PreservedAnalyses InstCombinePass::run(Function &F,
     return PreservedAnalyses::all();
 
   auto &AC = AM.getResult<AssumptionAnalysis>(F);
-  auto &KBD = AM.getResult<KnownBitsDataflowAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
+  auto &KBD = AM.getResult<KnownBitsDataflowAnalysis>(F);
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &ORE = AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
   auto &TTI = AM.getResult<TargetIRAnalysis>(F);
@@ -6297,11 +6297,11 @@ void InstructionCombiningPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addRequired<AAResultsWrapperPass>();
   AU.addRequired<AssumptionCacheTracker>();
+  AU.addRequired<KnownBitsDataflowAnalysisWrapperPass>();
   AU.addRequired<TargetLibraryInfoWrapperPass>();
   AU.addRequired<TargetTransformInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
-  AU.addRequired<KnownBitsDataflowAnalysisWrapperPass>();
   AU.addPreserved<AAResultsWrapperPass>();
   AU.addPreserved<GlobalsAAWrapperPass>();
   AU.addRequired<ProfileSummaryInfoWrapperPass>();

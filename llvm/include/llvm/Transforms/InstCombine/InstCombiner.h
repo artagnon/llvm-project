@@ -474,18 +474,18 @@ public:
       return;
     }
     llvm::computeKnownBits(V, Known, SQ.getWithInstruction(CtxI), Depth);
-    if (!Depth)
-      KBD.emplace_as(V, Known, CtxI);
+
+    // Depth is a monotonically increasing variable. Hence, earlier computations
+    // are always more refined than later ones, unless a literal hardcoded Depth
+    // variable is passed to this function, which never happens.
+    KBD.emplace_as(V, Known, CtxI);
   }
 
   KnownBits computeKnownBits(const Value *V, const Instruction *CtxI,
                              unsigned Depth = 0) const {
-    if (auto K = KBD.lookup(V, CtxI))
-      return *K;
-    auto K = llvm::computeKnownBits(V, SQ.getWithInstruction(CtxI), Depth);
-    if (!Depth)
-      KBD.emplace_as(V, K, CtxI);
-    return K;
+    KnownBits Known(KnownBitsDataflow::getBitWidth(V->getType(), SQ.DL));
+    computeKnownBits(V, Known, CtxI, Depth);
+    return Known;
   }
 
   bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero = false,

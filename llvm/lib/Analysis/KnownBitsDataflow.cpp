@@ -7,46 +7,16 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/KnownBitsDataflow.h"
-#include "llvm/ADT/DepthFirstIterator.h"
-#include "llvm/ADT/GraphTraits.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/Statistic.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/Value.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/KnownBits.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "known-bits-dataflow"
-
-STATISTIC(KnownBitsCacheHits, "Number of hits in the KnownBits cache");
-
-namespace llvm {
-template <typename NodeRef, typename ChildIteratorType>
-struct NodeGraphTraitsBase {
-  static NodeRef getEntryNode(NodeRef N) { return N; }
-  static ChildIteratorType child_begin(NodeRef N) { // NOLINT
-    return N->user_begin();
-  }
-  static ChildIteratorType child_end(NodeRef N) { // NOLINT
-    return N->user_end();
-  }
-};
-
-template <>
-struct GraphTraits<Value *>
-    : public NodeGraphTraitsBase<Value *, Value::user_iterator> {
-  using NodeRef = Value *;
-  using ChildIteratorType = Value::user_iterator;
-};
-} // namespace llvm
 
 // Pin the vtable.
 void KnownBitsVH::anchor() {}
@@ -66,14 +36,6 @@ void KnownBitsVH::allUsesReplacedWith(Value *New) {
   setValPtr(New);
 }
 
-KnownBitsWithCtxI::KnownBitsWithCtxI(const KnownBits &Known,
-                                     const Instruction *CtxI)
-    : KnownBits(Known), CtxI(const_cast<Instruction *>(CtxI)) {}
-
-bool KnownBitsWithCtxI::canUseWith(const Instruction *Other) const {
-  return Other == CtxI;
-}
-
 /// A wrapper around make_filter_range, that filters \p R on scalar types that
 /// are either integer or pointer type, as these are the only types handled by
 /// computeKnownBits.
@@ -84,20 +46,18 @@ static auto make_knownbits_range(RangeT &&R) { // NOLINT
   });
 }
 
-auto KnownBitsDataflow::forwardDataflow(const KnownBitsVH &V) const {
-  return make_filter_range(depth_first(V.getValPtr()),
-                           bind_front(&KnownBitsDataflow::contains, this));
-}
-
-void KnownBitsDataflow::invalidate(const KnownBitsVH &V) {
-  for (const Value *N : forwardDataflow(V))
-    value_as(N).resetAll();
-}
-
 unsigned KnownBitsDataflow::getBitWidth(Type *Ty, const DataLayout &DL) {
   if (unsigned BitWidth = Ty->getScalarSizeInBits())
     return BitWidth;
   return DL.getPointerTypeSizeInBits(Ty);
+}
+
+LLVM_ABI_FOR_TEST SmallVector<const Value *>
+KnownBitsDataflow::forwardDataflow(ArrayRef<KnownBitsVH> Roots) const {
+  SetVector<const Value *> Collected;
+  for (const KnownBitsVH &V : Roots)
+    Collected.insert_range(forwardDataflow(V));
+  return Collected.takeVector();
 }
 
 SmallVector<KnownBitsVH>
@@ -129,45 +89,15 @@ KnownBitsDataflow::computeRoots(const Function &F) const {
   return Roots;
 }
 
-/// For testing, we emplace all-conflict as a sentinel value.
-static KnownBits getAllConflict(unsigned BitWidth) {
-  KnownBits Known(BitWidth);
-  Known.setAllConflict();
-  return Known;
-}
-
-void KnownBitsDataflow::initializeEntireGraph(const Function &F) {
-  for (const Value *V : make_knownbits_range(make_pointer_range(F.args())))
-    emplace_as(V, getAllConflict(getBitWidth(V->getType(), getDataLayout())));
-
-  // Now collect all Instructions that aren't reachable from the function's
-  // arguments, updating Roots, as we test for unreachability.
-  for (const BasicBlock &BB : F) {
-    for (const Value *V : make_knownbits_range(make_pointer_range(BB))) {
-      emplace_as(V, getAllConflict(getBitWidth(V->getType(), getDataLayout())));
-    }
-  }
-}
-
-template <typename RangeT>
-SmallVector<const Value *>
-KnownBitsDataflow::forwardDataflow(RangeT &&Roots) const {
-  SetVector<const Value *> Collected;
-  for (const KnownBitsVH &V : Roots)
-    Collected.insert_range(forwardDataflow(V));
-  return Collected.takeVector();
-}
-
-bool KnownBitsDataflow::isLeaf(const Value *V) const {
-  return make_knownbits_range(V->users()).empty();
-}
-
 void KnownBitsDataflow::print(const Function &F, raw_ostream &OS) const {
+  auto IsLeaf = [](const Value *V) {
+    return make_knownbits_range(V->users()).empty();
+  };
   SmallVector<KnownBitsVH> Roots = computeRoots(F);
   for (const Value *V : forwardDataflow(Roots)) {
     if (is_contained(Roots, V))
       OS << "^ ";
-    else if (isLeaf(V))
+    else if (IsLeaf(V))
       OS << "$ ";
     else
       OS << "  ";
@@ -184,36 +114,17 @@ LLVM_DUMP_METHOD void KnownBitsDataflow::dump(const Function &F) const {
 }
 #endif
 
-std::optional<KnownBits>
-KnownBitsDataflow::lookup(const Value *V, const Instruction *CtxI) const {
-  auto It = find_as(V);
-  if (It == end())
-    return std::nullopt;
-  const KnownBitsWithCtxI &Known = It->second;
-  if (Known.isUnknown() || !Known.canUseWith(CtxI))
-    return std::nullopt;
-  ++KnownBitsCacheHits;
-  return Known;
-}
-
-void KnownBitsDataflow::emplace_as(const Value *V, const KnownBits &Known,
-                                   const Instruction *CtxI) {
-  if (Known.isUnknown())
-    return;
-  emplace_or_assign({V, this}, KnownBitsWithCtxI(Known, CtxI));
+bool KnownBitsDataflow::invalidate(Function &, const PreservedAnalyses &PA,
+                                   FunctionAnalysisManager::Invalidator &) {
+  auto PAC = PA.getChecker<KnownBitsDataflowAnalysis>();
+  return !PAC.preserved();
 }
 
 AnalysisKey KnownBitsDataflowAnalysis::Key;
 
 KnownBitsDataflow KnownBitsDataflowAnalysis::run(Function &F,
                                                  FunctionAnalysisManager &) {
-  return F.getDataLayout();
-}
-
-bool KnownBitsDataflow::invalidate(Function &, const PreservedAnalyses &PA,
-                                   FunctionAnalysisManager::Invalidator &) {
-  auto PAC = PA.getChecker<KnownBitsDataflowAnalysis>();
-  return !PAC.preserved();
+  return {};
 }
 
 // Legacy PM wrapper pass.
@@ -228,7 +139,7 @@ void KnownBitsDataflowAnalysisWrapperPass::getAnalysisUsage(
 }
 
 bool KnownBitsDataflowAnalysisWrapperPass::runOnFunction(Function &F) {
-  Result.reset(new KnownBitsDataflow(F.getDataLayout()));
+  Result.reset(new KnownBitsDataflow());
   return false;
 }
 

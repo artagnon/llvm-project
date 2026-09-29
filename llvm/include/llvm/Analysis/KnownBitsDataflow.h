@@ -5,14 +5,15 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// Caches KnownBits for a given IR Value, aand invalidates the cached results on
-// IR updates via a custom Callback ValueHandle. As such, what's provided is an
-// empty DenseMap with an API to insert and lookup.
+// Caches KnownBits for Values, aand invalidates the cached results on IR
+// updates by walking the dataflow graph. Provides a custom Map-like container
+// with lookup and insertion APIs.
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_KNOWNBITSDATAFLOW_H
 #define LLVM_ANALYSIS_KNOWNBITSDATAFLOW_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/GraphTraits.h"
@@ -35,7 +36,7 @@ class DataLayout;
 class raw_ostream;
 class KnownBitsDataflow;
 
-/// GraphTraits specializing for depth_first over Values.
+/// GraphTraits enabling depth_first over Values.
 template <typename NodeRef, typename ChildIteratorType>
 struct NodeGraphTraitsBase {
   static NodeRef getEntryNode(NodeRef N) { return N; }
@@ -54,8 +55,9 @@ struct GraphTraits<Value *>
   using ChildIteratorType = Value::user_iterator;
 };
 
-/// A custom ValueHandle with callback to erase KnownBits in the cache when a
-/// Value is deleted, or invalidate dependent KnownBits when RAUW'ed.
+/// A custom ValueHandle with callback to erase KnownBits in the cache when an
+/// Instruction is deleted, or invalidate dependent KnownBits when it is
+/// RAUW'ed.
 class KnownBitsVH : private CallbackVH {
   friend class KnownBitsDataflow;
   KnownBitsDataflow *KBD;
@@ -107,17 +109,16 @@ struct KnownBitsWithCtxI : public KnownBits {
       : KnownBits(Known), CtxI(const_cast<Instruction *>(CtxI)) {}
   bool canUseWith(const Instruction *Other) const {
     // If the cached value was computed with a CtxI, and one without a CxtI is
-    // requested, returning the cached value would lead to an optimization
-    // benefit.
+    // requested, returning the cached value would yield a better optimization
+    // result.
     return !Other || Other == CtxI;
   }
 };
 
 /// A structure keeps a mapping between a custom ValueHandle and
-/// AugmentedKnownBits, with core functionality to cache KnownBits with
-/// automatic invalidation on IR manipulation. Given its usecase, keeping a
-/// deterministically-ordered structure would be wasteful, and we can compute a
-/// deterministic ordering for testing and debugging purposes.
+/// KnownBitsWithCtxI, with core functionality to cache KnownBits with automatic
+/// invalidation on IR manipulation. We compute a deterministic ordering for
+/// entries in the map for testing and debugging.
 class LLVM_ABI KnownBitsDataflow : protected DenseMapForVH<KnownBitsWithCtxI> {
   friend class KnownBitsVH;
 
@@ -148,13 +149,14 @@ protected:
   }
 
   /// Invalidates KnownBits in the entire subgraph found from the
-  /// forwardDataflow walk starting from \p V. Used on IR manipulation.
+  /// forwardDataflow walk starting from \p V, turning them into Unknown values.
+  /// Triggered on IR manipulation events.
   LLVM_ABI_FOR_TEST void invalidate(const KnownBitsVH &V) {
     for (const Value *N : forwardDataflow(V))
       value_as(N).resetAll();
   }
 
-  /// Range-based variant of forwardDataflow.
+  /// Range-based variant of forwardDataflow used in print.
   LLVM_ABI_FOR_TEST SmallVector<const Value *>
   forwardDataflow(ArrayRef<KnownBitsVH> Roots) const;
 
@@ -164,13 +166,13 @@ protected:
   }
 
   /// Roots are the function \p F's arguments, along with Instructions that
-  /// expose a new root like phis and fptosi. This is used in print, skipping
-  /// any nodes not in the map.
+  /// expose a new root like phis and fptosi. This is used in print, to print
+  /// entries in the map in deterministic order.
   LLVM_ABI_FOR_TEST SmallVector<KnownBitsVH>
   computeRoots(const Function &F) const;
 
 public:
-  LLVM_ABI KnownBitsDataflow() = default;
+  LLVM_ABI KnownBitsDataflow() : BaseT(256) {}
   LLVM_ABI KnownBitsDataflow(const KnownBitsDataflow &) = delete;
   LLVM_ABI KnownBitsDataflow &operator=(const KnownBitsDataflow &) = delete;
 
@@ -180,9 +182,9 @@ public:
   using BaseT::empty;
   using BaseT::size;
 
-  /// Checks if \p V if it is present in the map, and if it has a
-  /// non-invalidated (unknown) KnownBits, returning it if so. Pass \p CtxI to
-  /// filter on compatibility of context-instructions.
+  /// Checks if \p V if it is present in the map, and if it has a valid
+  /// (non-Unknown) KnownBits, returning it if so. Pass \p CtxI to filter on
+  /// compatibility of context-instructions.
   std::optional<KnownBits>
       LLVM_ABI lookup(const Value *V, const Instruction *CtxI = nullptr) const {
     // Constants should never be inserted into the map. This is the fast
@@ -199,7 +201,7 @@ public:
   }
 
   /// Registers that \p V has KnownBits information \p Known, with
-  /// conext-instruction \p CtxI, overwriting any existing value. Is a no-op on
+  /// context-instruction \p CtxI, overwriting any existing value. Is a no-op on
   /// constant \p V and unknown \p Known.
   void LLVM_ABI emplace_as(const Value *V, const KnownBits &Known, // NOLINT
                            const Instruction *CtxI = nullptr) {
@@ -208,14 +210,14 @@ public:
     emplace_or_assign({V, this}, KnownBitsWithCtxI(Known, CtxI));
   }
 
-  /// This routine prints in determinstic order, at the cost of being expensive.
+  /// This routine prints in the entries in the map in deterministic order.
   LLVM_ABI void print(const Function &F, raw_ostream &OS) const;
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   LLVM_DUMP_METHOD void dump(const Function &F) const;
 #endif
 
-  bool invalidate(Function &, const PreservedAnalyses &PA,
-                  FunctionAnalysisManager::Invalidator &);
+  bool LLVM_ABI invalidate(Function &, const PreservedAnalyses &PA,
+                           FunctionAnalysisManager::Invalidator &);
 };
 
 class LLVM_ABI KnownBitsDataflowAnalysis

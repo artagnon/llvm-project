@@ -39,10 +39,10 @@ bool vputils::usesFirstLaneOnly(ArrayRef<const VPUser *> Users,
   for (unsigned I = 0; I < Worklist.size(); ++I) {
     auto [WorklistDef, WorklistUsers] = Worklist[I];
     for (const VPUser *CurU : WorklistUsers) {
-      bool ShouldRecurse;
-      if (CurU->usesFirstLaneOnly(WorklistDef, ShouldRecurse))
+      VPRecurseResult Res = CurU->usesFirstLaneOnly(WorklistDef);
+      if (Res == VPRecurseResult::True)
         continue;
-      if (!ShouldRecurse)
+      if (Res != VPRecurseResult::FalseRecurse)
         return false;
 
       // We rely on the fact that the current implementations of

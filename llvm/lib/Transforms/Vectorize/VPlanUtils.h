@@ -25,7 +25,10 @@ class PredicatedScalarEvolution;
 namespace llvm {
 
 namespace vputils {
-/// Returns true if only the first lane of \p Def is used.
+/// Returns true if only the first lane of \p Def is used by any of \p Users.
+bool usesFirstLaneOnly(ArrayRef<const VPUser *> Users, const VPValue *Def);
+
+/// Returns true if only the first lane of \p Def is used by all users.
 bool onlyFirstLaneUsed(const VPValue *Def);
 
 /// Returns true if only the first part of \p Def is used.

@@ -475,17 +475,14 @@ public:
 
   /// Returns true if the VPUser uses scalars of operand \p Op. Conservatively
   /// returns if only first (scalar) lane is used, as default.
-  virtual bool usesScalars(const VPValue *Op) const {
-    assert(is_contained(operands(), Op) &&
-           "Op must be an operand of the recipe");
-    return usesFirstLaneOnly(Op);
-  }
+  virtual bool usesScalars(const VPValue *Op) const;
 
   /// Returns true if the VPUser only uses the first lane of operand \p Op.
   /// Conservatively returns false.
-  virtual bool usesFirstLaneOnly(const VPValue *Op) const {
+  virtual bool usesFirstLaneOnly(const VPValue *Op, bool &ShouldRecurse) const {
     assert(is_contained(operands(), Op) &&
            "Op must be an operand of the recipe");
+    ShouldRecurse = false;
     return false;
   }
 

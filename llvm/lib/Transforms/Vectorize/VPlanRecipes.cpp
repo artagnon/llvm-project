@@ -1761,10 +1761,15 @@ bool VPInstruction::opcodeMayReadOrWriteFromMemory() const {
   }
 }
 
-bool VPInstruction::usesFirstLaneOnly(const VPValue *Op) const {
+bool VPInstruction::usesFirstLaneOnly(const VPValue *Op,
+                                      bool &ShouldRecurse) const {
   assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
-  if (Instruction::isBinaryOp(getOpcode()) || Instruction::isCast(getOpcode()))
-    return vputils::onlyFirstLaneUsed(this);
+  ShouldRecurse = false;
+  if (Instruction::isBinaryOp(getOpcode()) ||
+      Instruction::isCast(getOpcode())) {
+    ShouldRecurse = true;
+    return false;
+  }
 
   switch (getOpcode()) {
   default:
@@ -1784,7 +1789,8 @@ bool VPInstruction::usesFirstLaneOnly(const VPValue *Op) const {
   case Instruction::Freeze:
   case VPInstruction::Not:
     // TODO: Cover additional opcodes.
-    return vputils::onlyFirstLaneUsed(this);
+    ShouldRecurse = true;
+    return false;
   case Instruction::Load:
   case VPInstruction::ActiveLaneMask:
   case VPInstruction::WideActiveLaneMask:
@@ -1805,7 +1811,8 @@ bool VPInstruction::usesFirstLaneOnly(const VPValue *Op) const {
     // Before replicating, it will have only a single operand.
     return getNumOperands() > 1;
   case VPInstruction::PtrAdd:
-    return Op == getOperand(0) || vputils::onlyFirstLaneUsed(this);
+    ShouldRecurse = true;
+    return Op == getOperand(0);
   case VPInstruction::WidePtrAdd:
     // WidePtrAdd supports scalar and vector base addresses.
     return false;
@@ -1814,6 +1821,10 @@ bool VPInstruction::usesFirstLaneOnly(const VPValue *Op) const {
     return Op == getOperand(0);
   };
   llvm_unreachable("switch should return");
+}
+
+bool VPInstruction::usesScalars(const VPValue *Op) const {
+  return isSingleScalar() || vputils::usesFirstLaneOnly(this, Op);
 }
 
 bool VPInstruction::usesFirstPartOnly(const VPValue *Op) const {
@@ -2247,7 +2258,7 @@ void VPWidenCallRecipe::execute(VPTransformState &State) {
     if (!VFTy->getParamType(I.index())->isVectorTy())
       Arg = State.get(I.value(), VPLane(0));
     else
-      Arg = State.get(I.value(), usesFirstLaneOnly(I.value()));
+      Arg = State.get(I.value(), vputils::usesFirstLaneOnly(this, I.value()));
     Args.push_back(Arg);
   }
 
@@ -2279,9 +2290,11 @@ InstructionCost VPWidenCallRecipe::computeCallCost(Function *Variant,
                                   Ctx.CostKind);
 }
 
-bool VPWidenCallRecipe::usesFirstLaneOnly(const VPValue *Op) const {
+bool VPWidenCallRecipe::usesFirstLaneOnly(const VPValue *Op,
+                                          bool &ShouldRecurse) const {
   assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
   assert(Variant && "Variant not set");
+  ShouldRecurse = false;
   FunctionType *VFTy = Variant->getFunctionType();
   return all_of(enumerate(args()), [VFTy, &Op](const auto &Arg) {
     auto [Idx, V] = Arg;
@@ -2343,7 +2356,7 @@ CallInst *VPWidenIntrinsicRecipe::createVectorCall(VPTransformState &State) {
                                            State.TTI))
       Arg = State.get(I.value(), VPLane(0));
     else
-      Arg = State.get(I.value(), usesFirstLaneOnly(I.value()));
+      Arg = State.get(I.value(), vputils::usesFirstLaneOnly(this, I.value()));
     if (isVectorIntrinsicWithOverloadTypeAtArg(VectorIntrinsicID, I.index(),
                                                State.TTI))
       TysForDecl.push_back(Arg->getType());
@@ -2436,8 +2449,10 @@ StringRef VPWidenIntrinsicRecipe::getIntrinsicName() const {
   return Intrinsic::getBaseName(VectorIntrinsicID);
 }
 
-bool VPWidenIntrinsicRecipe::usesFirstLaneOnly(const VPValue *Op) const {
+bool VPWidenIntrinsicRecipe::usesFirstLaneOnly(const VPValue *Op,
+                                               bool &ShouldRecurse) const {
   assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
+  ShouldRecurse = false;
   return all_of(enumerate(operands()), [this, &Op](const auto &X) {
     auto [Idx, V] = X;
     return V != Op || isVectorIntrinsicWithScalarOpAtArg(getVectorIntrinsicID(),
@@ -3330,8 +3345,10 @@ void VPScalarIVStepsRecipe::printRecipe(raw_ostream &O, const Twine &Indent,
 }
 #endif
 
-bool VPWidenGEPRecipe::usesFirstLaneOnly(const VPValue *Op) const {
+bool VPWidenGEPRecipe::usesFirstLaneOnly(const VPValue *Op,
+                                         bool &ShouldRecurse) const {
   assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
+  ShouldRecurse = false;
   return vputils::isSingleScalar(Op);
 }
 
@@ -5161,9 +5178,11 @@ void VPReductionPHIRecipe::printRecipe(raw_ostream &O, const Twine &Indent,
 }
 #endif
 
-bool VPBlendRecipe::usesFirstLaneOnly(const VPValue *Op) const {
+bool VPBlendRecipe::usesFirstLaneOnly(const VPValue *Op,
+                                      bool &ShouldRecurse) const {
   assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
-  return vputils::onlyFirstLaneUsed(this);
+  ShouldRecurse = true;
+  return false;
 }
 
 void VPWidenPHIRecipe::execute(VPTransformState &State) {

@@ -10,6 +10,8 @@
 #define LLVM_TRANSFORMS_VECTORIZE_VPLANUTILS_H
 
 #include "VPlan.h"
+#include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/BlockFrequency.h"
 #include "llvm/Support/BranchProbability.h"
 #include "llvm/Support/Compiler.h"
@@ -29,8 +31,8 @@ namespace vputils {
 /// recursively.
 inline bool usesFirstLaneOnly(ArrayRef<const VPUser *> Users,
                               const VPValue *Def) {
-  SmallMapVector<const VPValue *, SmallVector<const VPUser *>, 8> Worklist;
-  Worklist.insert({Def, to_vector(Users)});
+  SmallMapVector<const VPValue *, SmallVector<const VPUser *>, 16> Worklist;
+  Worklist.try_emplace(Def, Users);
   for (unsigned I = 0; I < Worklist.size(); ++I) {
     auto [WorklistDef, WorklistUsers] = Worklist.at_idx(I);
     for (const VPUser *CurU : WorklistUsers) {
@@ -45,14 +47,16 @@ inline bool usesFirstLaneOnly(ArrayRef<const VPUser *> Users,
       // We rely on the fact that the current implementations of
       // usesFirstLaneOnly do not require recursion for non-SingleDefs.
       const VPValue *CurDef = cast<VPSingleDefRecipe>(CurU);
-      Worklist.insert({CurDef, to_vector_of<const VPUser *>(CurDef->users())});
+      Worklist.try_emplace(CurDef, CurDef->users());
     }
   }
   return true;
 }
 
 /// Returns true if only the first lane of \p Def is used by all its users.
-bool onlyFirstLaneUsed(const VPValue *Def);
+inline bool onlyFirstLaneUsed(const VPValue *Def) {
+  return usesFirstLaneOnly(Def->users(), Def);
+}
 
 /// Returns true if only the first part of \p Def is used.
 bool onlyFirstPartUsed(const VPValue *Def);

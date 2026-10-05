@@ -1761,66 +1761,6 @@ bool VPInstruction::opcodeMayReadOrWriteFromMemory() const {
   }
 }
 
-VPRecurseResult VPInstruction::usesFirstLaneOnly(const VPValue *Op) const {
-  assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
-  if (Instruction::isBinaryOp(getOpcode()) ||
-      Instruction::isCast(getOpcode())) {
-    return VPRecurseResult::FalseRecurse;
-  }
-
-  switch (getOpcode()) {
-  default:
-    return VPRecurseResult::False;
-  case Instruction::ExtractElement:
-    return Op == getOperand(1) ? VPRecurseResult::True : VPRecurseResult::False;
-  case Instruction::InsertElement:
-    return Op == getOperand(1) || Op == getOperand(2) ? VPRecurseResult::True
-                                                      : VPRecurseResult::False;
-  case VPInstruction::ExtractLastActive:
-    return Op == getOperand(0) ? VPRecurseResult::True : VPRecurseResult::False;
-  case Instruction::PHI:
-    return VPRecurseResult::True;
-  case Instruction::FCmp:
-  case Instruction::ICmp:
-  case Instruction::Select:
-  case Instruction::Or:
-  case Instruction::Freeze:
-  case VPInstruction::Not:
-    // TODO: Cover additional opcodes.
-    return VPRecurseResult::FalseRecurse;
-  case Instruction::Load:
-  case VPInstruction::ActiveLaneMask:
-  case VPInstruction::WideActiveLaneMask:
-  case VPInstruction::ExplicitVectorLength:
-  case VPInstruction::CanonicalIVIncrementForPart:
-  case VPInstruction::BranchOnCount:
-  case VPInstruction::BranchOnCond:
-  case VPInstruction::BranchOnTwoConds:
-  case VPInstruction::Broadcast:
-  case VPInstruction::Intrinsic:
-  case VPInstruction::ReductionStartVector:
-  case VPInstruction::ResumeForEpilogue:
-    return VPRecurseResult::True;
-  case VPInstruction::BuildStructVector:
-  case VPInstruction::BuildVector:
-    // Before replicating by VF, Build(Struct)Vector uses all lanes of the
-    // operand, after replicating its operands only the first lane is used.
-    // Before replicating, it will have only a single operand.
-    return getNumOperands() > 1 ? VPRecurseResult::True
-                                : VPRecurseResult::False;
-  case VPInstruction::PtrAdd:
-    return Op == getOperand(0) ? VPRecurseResult::True
-                               : VPRecurseResult::FalseRecurse;
-  case VPInstruction::WidePtrAdd:
-    // WidePtrAdd supports scalar and vector base addresses.
-    return VPRecurseResult::False;
-  case VPInstruction::ExitingIVValue:
-  case VPInstruction::ExtractLane:
-    return Op == getOperand(0) ? VPRecurseResult::True : VPRecurseResult::False;
-  };
-  llvm_unreachable("switch should return");
-}
-
 bool VPInstruction::usesScalars(const VPValue *Op) const {
   return isSingleScalar() || vputils::usesFirstLaneOnly(this, Op);
 }
@@ -5178,11 +5118,6 @@ void VPReductionPHIRecipe::printRecipe(raw_ostream &O, const Twine &Indent,
     O << " (VF scaled by 1/" << getVFScaleFactor() << ")";
 }
 #endif
-
-VPRecurseResult VPBlendRecipe::usesFirstLaneOnly(const VPValue *Op) const {
-  assert(is_contained(operands(), Op) && "Op must be an operand of the recipe");
-  return VPRecurseResult::FalseRecurse;
-}
 
 void VPWidenPHIRecipe::execute(VPTransformState &State) {
   executePhiRecipe(this, *this, State, /*IsScalar=*/false, Name);

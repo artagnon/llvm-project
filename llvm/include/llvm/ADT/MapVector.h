@@ -86,6 +86,9 @@ public:
   [[nodiscard]] const std::pair<KeyT, ValueT> &back() const {
     return Vector.back();
   }
+  [[nodiscard]] std::pair<KeyT, ValueT> at_idx(unsigned Idx) const { // NOLINT
+    return Vector[Idx];
+  }
 
   void clear() {
     Map.clear();

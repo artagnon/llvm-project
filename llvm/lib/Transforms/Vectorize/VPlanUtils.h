@@ -25,8 +25,31 @@ class PredicatedScalarEvolution;
 namespace llvm {
 
 namespace vputils {
-/// Returns true if only the first lane of \p Def is used by all of \p Users.
-bool usesFirstLaneOnly(ArrayRef<const VPUser *> Users, const VPValue *Def);
+/// Returns true if only the first lane of \p Def is used by all of \p Users
+/// recursively.
+inline bool usesFirstLaneOnly(ArrayRef<const VPUser *> Users,
+                              const VPValue *Def) {
+  SmallMapVector<const VPValue *, SmallVector<const VPUser *>, 8> Worklist;
+  Worklist.insert({Def, to_vector(Users)});
+  for (unsigned I = 0; I < Worklist.size(); ++I) {
+    auto [WorklistDef, WorklistUsers] = Worklist.at_idx(I);
+    for (const VPUser *CurU : WorklistUsers) {
+      if (Worklist.contains(dyn_cast<VPSingleDefRecipe>(CurU)))
+        continue;
+      VPRecurseResult Res = CurU->usesFirstLaneOnly(WorklistDef);
+      if (Res == VPRecurseResult::True)
+        continue;
+      if (Res != VPRecurseResult::FalseRecurse)
+        return false;
+
+      // We rely on the fact that the current implementations of
+      // usesFirstLaneOnly do not require recursion for non-SingleDefs.
+      const VPValue *CurDef = cast<VPSingleDefRecipe>(CurU);
+      Worklist.insert({CurDef, to_vector_of<const VPUser *>(CurDef->users())});
+    }
+  }
+  return true;
+}
 
 /// Returns true if only the first lane of \p Def is used by all its users.
 bool onlyFirstLaneUsed(const VPValue *Def);

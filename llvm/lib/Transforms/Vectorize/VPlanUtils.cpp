@@ -32,28 +32,6 @@ using namespace llvm;
 using namespace llvm::VPlanPatternMatch;
 using namespace llvm::SCEVPatternMatch;
 
-bool vputils::usesFirstLaneOnly(ArrayRef<const VPUser *> Users,
-                                const VPValue *Def) {
-  SetVector<std::pair<const VPValue *, SmallVector<const VPUser *>>> Worklist;
-  Worklist.insert({Def, to_vector(Users)});
-  for (unsigned I = 0; I < Worklist.size(); ++I) {
-    auto [WorklistDef, WorklistUsers] = Worklist[I];
-    for (const VPUser *CurU : WorklistUsers) {
-      VPRecurseResult Res = CurU->usesFirstLaneOnly(WorklistDef);
-      if (Res == VPRecurseResult::True)
-        continue;
-      if (Res != VPRecurseResult::FalseRecurse)
-        return false;
-
-      // We rely on the fact that the current implementations of
-      // usesFirstLaneOnly do not require recursion for non-SingleDefs.
-      const VPValue *CurDef = cast<VPSingleDefRecipe>(CurU);
-      Worklist.insert({CurDef, to_vector_of<const VPUser *>(CurDef->users())});
-    }
-  }
-  return true;
-}
-
 bool vputils::onlyFirstLaneUsed(const VPValue *Def) {
   return usesFirstLaneOnly(Def->users(), Def);
 }

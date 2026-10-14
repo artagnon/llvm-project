@@ -2027,7 +2027,7 @@ void MatchableInfo::buildAliasResultOperands(bool AliasConstraintsAreChecked) {
 
 static unsigned
 getConverterOperandID(const std::string &Name,
-                      SmallSetVector<CachedHashString, 16> &Table,
+                      SetVector<CachedHashString> &Table,
                       bool &IsNew) {
   IsNew = Table.insert(CachedHashString(Name));
 
@@ -2043,8 +2043,8 @@ emitConvertFuncs(CodeGenTarget &Target, StringRef ClassName,
                  std::vector<std::unique_ptr<MatchableInfo>> &Infos,
                  bool HasMnemonicFirst, bool HasOptionalOperands,
                  raw_ostream &OS) {
-  SmallSetVector<CachedHashString, 16> OperandConversionKinds;
-  SmallSetVector<CachedHashString, 16> InstructionConversionKinds;
+  SetVector<CachedHashString> OperandConversionKinds;
+  SetVector<CachedHashString> InstructionConversionKinds;
   std::vector<std::vector<uint8_t>> ConversionTable;
 
   // minimum is custom converter plus a operand index in parsed OperandVector

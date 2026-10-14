@@ -203,7 +203,7 @@ static const MDNode *getCommonMemCacheHint(const RangeT &Nodes) {
     /// This records all nodes attempted to be added to the worklist since we
     /// considered a new worklist entry. As we keep do not add duplicate nodes
     /// in the worklist, this is different from the tail of the worklist.
-    SmallSetVector<SDNode *, 32> PruningList;
+    SetVector<SDNode *> PruningList;
 
     /// Map from candidate StoreNode to the pair of RootNode and count.
     /// The count is used to track how many times we have seen the StoreNode

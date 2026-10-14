@@ -1938,87 +1938,79 @@ Sema::ActOnDoStmt(SourceLocation DoLoc, Stmt *Body,
 
 namespace {
   // Use SetVector since the diagnostic cares about the ordering of the Decl's.
-  using DeclSetVector = llvm::SmallSetVector<VarDecl *, 8>;
+using DeclSetVector = llvm::SetVector<VarDecl *>;
 
-  // This visitor will traverse a conditional statement and store all
-  // the evaluated decls into a vector.  Simple is set to true if none
-  // of the excluded constructs are used.
-  class DeclExtractor : public EvaluatedExprVisitor<DeclExtractor> {
-    DeclSetVector &Decls;
-    SmallVectorImpl<SourceRange> &Ranges;
-    bool Simple;
-  public:
-    typedef EvaluatedExprVisitor<DeclExtractor> Inherited;
+// This visitor will traverse a conditional statement and store all
+// the evaluated decls into a vector.  Simple is set to true if none
+// of the excluded constructs are used.
+class DeclExtractor : public EvaluatedExprVisitor<DeclExtractor> {
+  DeclSetVector &Decls;
+  SmallVectorImpl<SourceRange> &Ranges;
+  bool Simple;
 
-    DeclExtractor(Sema &S, DeclSetVector &Decls,
-                  SmallVectorImpl<SourceRange> &Ranges) :
-        Inherited(S.Context),
-        Decls(Decls),
-        Ranges(Ranges),
-        Simple(true) {}
+public:
+  typedef EvaluatedExprVisitor<DeclExtractor> Inherited;
 
-    bool isSimple() { return Simple; }
+  DeclExtractor(Sema &S, DeclSetVector &Decls,
+                SmallVectorImpl<SourceRange> &Ranges)
+      : Inherited(S.Context), Decls(Decls), Ranges(Ranges), Simple(true) {}
 
-    // Replaces the method in EvaluatedExprVisitor.
-    void VisitMemberExpr(MemberExpr* E) {
+  bool isSimple() { return Simple; }
+
+  // Replaces the method in EvaluatedExprVisitor.
+  void VisitMemberExpr(MemberExpr *E) { Simple = false; }
+
+  // Any Stmt not explicitly listed will cause the condition to be marked
+  // complex.
+  void VisitStmt(Stmt *S) { Simple = false; }
+
+  void VisitBinaryOperator(BinaryOperator *E) {
+    Visit(E->getLHS());
+    Visit(E->getRHS());
+  }
+
+  void VisitCastExpr(CastExpr *E) { Visit(E->getSubExpr()); }
+
+  void VisitUnaryOperator(UnaryOperator *E) {
+    // Skip checking conditionals with derefernces.
+    if (E->getOpcode() == UO_Deref)
       Simple = false;
-    }
-
-    // Any Stmt not explicitly listed will cause the condition to be marked
-    // complex.
-    void VisitStmt(Stmt *S) { Simple = false; }
-
-    void VisitBinaryOperator(BinaryOperator *E) {
-      Visit(E->getLHS());
-      Visit(E->getRHS());
-    }
-
-    void VisitCastExpr(CastExpr *E) {
+    else
       Visit(E->getSubExpr());
+  }
+
+  void VisitConditionalOperator(ConditionalOperator *E) {
+    Visit(E->getCond());
+    Visit(E->getTrueExpr());
+    Visit(E->getFalseExpr());
+  }
+
+  void VisitParenExpr(ParenExpr *E) { Visit(E->getSubExpr()); }
+
+  void VisitBinaryConditionalOperator(BinaryConditionalOperator *E) {
+    Visit(E->getOpaqueValue()->getSourceExpr());
+    Visit(E->getFalseExpr());
+  }
+
+  void VisitIntegerLiteral(IntegerLiteral *E) {}
+  void VisitFloatingLiteral(FloatingLiteral *E) {}
+  void VisitCXXBoolLiteralExpr(CXXBoolLiteralExpr *E) {}
+  void VisitCharacterLiteral(CharacterLiteral *E) {}
+  void VisitGNUNullExpr(GNUNullExpr *E) {}
+  void VisitImaginaryLiteral(ImaginaryLiteral *E) {}
+
+  void VisitDeclRefExpr(DeclRefExpr *E) {
+    VarDecl *VD = dyn_cast<VarDecl>(E->getDecl());
+    if (!VD) {
+      // Don't allow unhandled Decl types.
+      Simple = false;
+      return;
     }
 
-    void VisitUnaryOperator(UnaryOperator *E) {
-      // Skip checking conditionals with derefernces.
-      if (E->getOpcode() == UO_Deref)
-        Simple = false;
-      else
-        Visit(E->getSubExpr());
-    }
+    Ranges.push_back(E->getSourceRange());
 
-    void VisitConditionalOperator(ConditionalOperator *E) {
-      Visit(E->getCond());
-      Visit(E->getTrueExpr());
-      Visit(E->getFalseExpr());
-    }
-
-    void VisitParenExpr(ParenExpr *E) {
-      Visit(E->getSubExpr());
-    }
-
-    void VisitBinaryConditionalOperator(BinaryConditionalOperator *E) {
-      Visit(E->getOpaqueValue()->getSourceExpr());
-      Visit(E->getFalseExpr());
-    }
-
-    void VisitIntegerLiteral(IntegerLiteral *E) { }
-    void VisitFloatingLiteral(FloatingLiteral *E) { }
-    void VisitCXXBoolLiteralExpr(CXXBoolLiteralExpr *E) { }
-    void VisitCharacterLiteral(CharacterLiteral *E) { }
-    void VisitGNUNullExpr(GNUNullExpr *E) { }
-    void VisitImaginaryLiteral(ImaginaryLiteral *E) { }
-
-    void VisitDeclRefExpr(DeclRefExpr *E) {
-      VarDecl *VD = dyn_cast<VarDecl>(E->getDecl());
-      if (!VD) {
-        // Don't allow unhandled Decl types.
-        Simple = false;
-        return;
-      }
-
-      Ranges.push_back(E->getSourceRange());
-
-      Decls.insert(VD);
-    }
+    Decls.insert(VD);
+  }
 
   }; // end class DeclExtractor
 

@@ -704,7 +704,7 @@ void CodeGenModule::EmitCXXModuleInitFunc(Module *Primary) {
   // Module initializers for imported modules are emitted first.
 
   // Collect all the modules that we import
-  llvm::SmallSetVector<Module *, 8> AllImports;
+  llvm::SetVector<Module *> AllImports;
   // Ones that we export
   for (auto I : Primary->Exports)
     AllImports.insert(I.first);

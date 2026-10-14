@@ -473,12 +473,12 @@ private:
   /// if its primary namespace comes from the chain. If it does, we add the
   /// primary to this set, so that we can write out lexical content updates for
   /// it.
-  llvm::SmallSetVector<const DeclContext *, 16> UpdatedDeclContexts;
+  llvm::SetVector<const DeclContext *> UpdatedDeclContexts;
 
   /// Same as UpdatedDeclContexts except that we only apply these updates
   /// lazily. e.g., if these decl context are touched during the writing
   /// process. Only meaningful in reduced BMI.
-  llvm::SmallSetVector<const DeclContext *, 16> UpdatedDeclContextsLazy;
+  llvm::SetVector<const DeclContext *> UpdatedDeclContextsLazy;
 
   /// Keeps track of declarations that we must emit, even though we're
   /// not guaranteed to be able to find them by walking the AST starting at the

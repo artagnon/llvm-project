@@ -844,7 +844,7 @@ protected:
   llvm::DenseMap<Selector, llvm::GlobalVariable *> MethodVarNames;
 
   /// DefinedCategoryNames - list of category names in form Class_Category.
-  llvm::SmallSetVector<llvm::CachedHashString, 16> DefinedCategoryNames;
+  llvm::SetVector<llvm::CachedHashString> DefinedCategoryNames;
 
   /// MethodVarTypes - uniqued method type signatures. We have to use
   /// a StringMap here because have no other unique reference.

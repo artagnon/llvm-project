@@ -459,7 +459,7 @@ private:
   const DominatorTreeT &DT;
 
   // Recognized cycles with divergent exits.
-  SmallSetVector<CycleRef, 8> DivergentExitCycles;
+  SetVector<CycleRef> DivergentExitCycles;
 
   // Cycles assumed to be divergent.
   //

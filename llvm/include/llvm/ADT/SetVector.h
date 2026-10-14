@@ -25,6 +25,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/STLForwardCompat.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Compiler.h"
 #include <cassert>
@@ -339,12 +340,24 @@ private:
   vector_type vector_;   ///< The vector.
 };
 
+/// This set is only used when SmallSetVector grows large enough that linear
+/// scanning would be unprofitable. If we have a pointer, use SmallPtrSet, and
+/// fall back to a DenseSet, but don't inline any elements.
+template <typename T>
+using ConditionalSet =
+    std::conditional_t<std::is_pointer_v<T>, SmallPtrSet<T, 0>, DenseSet<T>>;
+
 /// A SetVector that performs no allocations if smaller than
 /// a certain size.
 template <typename T, unsigned N>
-class SmallSetVector : public SetVector<T, SmallVector<T, N>, DenseSet<T>, N> {
+class SmallSetVector
+    : public SetVector<T, SmallVector<T, N>, ConditionalSet<T>, N> {
+  static_assert(isPowerOf2_64(N) &&
+                "SmallSetVector is meant to be used with pow-of-2 size-hint");
+
 public:
-  using SetVector<T, SmallVector<T, N>, DenseSet<T>, N>::SetVector;
+  using SetVector<T, SmallVector<T, N>, ConditionalSet<T>,
+                  N>::SetVector;
 };
 
 } // end namespace llvm

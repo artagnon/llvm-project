@@ -30,7 +30,7 @@ class OpenACCSupport;
 #include "mlir/Dialect/OpenACC/Transforms/Passes.h.inc"
 
 /// Holds information for which integers represent a device type in the runtime.
-using TypesForDevice = llvm::SmallSetVector<int64_t, 3>;
+using TypesForDevice = llvm::SmallSetVector<int64_t, 4>;
 
 //===----------------------------------------------------------------------===//
 // ACCSpecializeForDevice patterns
